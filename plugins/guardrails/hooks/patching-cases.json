@@ -1,0 +1,122 @@
+[
+  {
+    "expect": "deny",
+    "why": "sed in place on a source file",
+    "command": "sed -i 's/foo/bar/' src/meet.rs"
+  },
+  {
+    "expect": "deny",
+    "why": "perl in place on a source file",
+    "command": "perl -i -pe 's/a/b/' src/lib.rs"
+  },
+  {
+    "expect": "deny",
+    "why": "heredoc written straight over a source file",
+    "command": "cat > src/arrange.rs <<'EOF'\nfn x() {}\nEOF"
+  },
+  {
+    "expect": "deny",
+    "why": "the M5 shape: an interpreter fed a patch script",
+    "command": "python3 - <<'PY'\npatch('src/meet.rs', pairs)\nPY"
+  },
+  {
+    "expect": "deny",
+    "why": "append is a write too",
+    "command": "echo 'fn sneaky() {}' >> src/lib.rs"
+  },
+  {
+    "expect": "deny",
+    "why": "the 2026-09-05 shape: an interpreter rewriting a tracked doc",
+    "command": "python3 - <<'PY'\nimport pathlib\np = pathlib.Path('docs/roadmap.md')\ns = p.read_text()\np.write_text(s.replace('old', 'new'))\nPY"
+  },
+  {
+    "expect": "deny",
+    "why": "a tracked manifest is not a scratch file",
+    "command": "cat > Cargo.toml <<'EOF'\n[workspace]\nresolver = \"2\"\nEOF"
+  },
+  {
+    "expect": "deny",
+    "why": "sed in place on a tracked doc",
+    "command": "sed -i 's/one/two/' docs/notes.md"
+  },
+  {
+    "expect": "deny",
+    "why": "the path handed to the interpreter as an argument, not in the body",
+    "command": "python3 - CLAUDE.md docs/notes.md <<'PY'\nimport sys, pathlib\nfor p in sys.argv[1:]:\n    pathlib.Path(p).write_text(edit(pathlib.Path(p).read_text()))\nPY"
+  },
+  {
+    "expect": "allow",
+    "why": "sed -n reads, it does not write",
+    "command": "sed -n '170,190p' src/intersect.rs"
+  },
+  {
+    "expect": "allow",
+    "why": "grep over a source file",
+    "command": "grep -n 'enum HowItRuns' src/arrange.rs"
+  },
+  {
+    "expect": "allow",
+    "why": "git reading a source file",
+    "command": "git diff src/error.rs"
+  },
+  {
+    "expect": "allow",
+    "why": "a commit message that describes this very rule is not a patch",
+    "command": "git commit -F - <<'MSG'\nbuild: refuse sed -i on a .rs file, per CLAUDE.md\nMSG"
+  },
+  {
+    "expect": "allow",
+    "why": "writing a shell script, not Rust",
+    "command": "cat > /tmp/measure.sh <<'SH'\necho hi\nSH"
+  },
+  {
+    "expect": "allow",
+    "why": "a throwaway probe crate under /tmp is what Bash is kept for",
+    "command": "cat > /tmp/claude-1000/scratchpad/zeroprobe/src/main.rs <<'EOF'\nfn main() {}\nEOF"
+  },
+  {
+    "expect": "allow",
+    "why": "a probe crate's manifest is scratch too",
+    "command": "cat > /tmp/claude-1000/scratchpad/zeroprobe/Cargo.toml <<'EOF'\n[package]\nname = \"zeroprobe\"\nEOF"
+  },
+  {
+    "expect": "allow",
+    "why": "fixing up a scratch probe in place harms nothing the tree keeps",
+    "command": "sed -i 's/\\.low()/.lo()/g' /tmp/claude-1000/scratchpad/zeroprobe/src/main.rs"
+  },
+  {
+    "expect": "allow",
+    "why": "a measurement report written to the scratchpad",
+    "command": "python3 - <<'PY'\nopen('/tmp/claude-1000/scratchpad/sweep.md', 'w').write(report)\nPY"
+  },
+  {
+    "expect": "allow",
+    "why": "redirecting a read of a tracked file into a scratch file",
+    "command": "sed -n '1,50p' docs/notes.md > /tmp/head.txt"
+  },
+  {
+    "expect": "allow",
+    "why": "a scratch path held in a variable is still a scratch path",
+    "command": "S=/tmp/claude-1000/proj/abc/scratchpad\ncat > \"$S/fixture-questions.md\" <<'MD'\n- [ ] **Q7 / Q11** a fixture\nMD"
+  },
+  {
+    "expect": "allow",
+    "why": "the braced form of the same variable",
+    "command": "S=/tmp/claude-1000/proj/abc/scratchpad; printf x > ${S}/note.md"
+  },
+  {
+    "expect": "allow",
+    "why": "a variable built out of an earlier variable",
+    "command": "D=/tmp/probe; F=$D/src/main.rs; printf x > $F"
+  },
+  {
+    "expect": "deny",
+    "why": "a variable holding a tree path is still a tree path",
+    "command": "W=src/geom\ncat > \"$W/lib.rs\" <<'RS'\npub fn x() {}\nRS"
+  },
+  {
+    "expect": "deny",
+    "why": "a variable this command never set stays unresolved, and unresolved is a tree file",
+    "command": "printf x > \"$SET_IN_SOME_OTHER_CALL/lib.rs\""
+  }
+]

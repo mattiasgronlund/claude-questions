@@ -162,8 +162,13 @@ python3 "$q" check "$file" >/dev/null ||
 	fail "the checker fired on an entry that follows the grammar"
 
 if [ "$failed" -gt 0 ]; then
-	echo "$failed of $total cases came out wrong"
+	echo "$failed of $total parser cases came out wrong"
 	exit 1
 fi
 
-echo "$total cases, all as expected"
+echo "$total parser cases, all as expected"
+
+# The status line is the parser's other caller, and the half a person actually
+# reads. It is checked here rather than in the consuming repo because that is
+# where the two used to drift apart.
+exec "$here/check-statusline.sh"

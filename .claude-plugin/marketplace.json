@@ -8,7 +8,17 @@
     {
       "name": "questions",
       "source": "./plugins/questions",
-      "description": "Open questions for the user: one parser, a grammar that can be checked, and the skill that says how to write one."
+      "description": "Open questions for the user: one parser, a grammar that can be checked, the status line that reads it, and the skill that says how to write one."
+    },
+    {
+      "name": "guardrails",
+      "source": "./plugins/guardrails",
+      "description": "The two hooks that hold a rule the prose cannot: no in-place shell patching of tracked files, and a context budget that asks for a handoff."
+    },
+    {
+      "name": "practices",
+      "source": "./plugins/practices",
+      "description": "The shared working skills: how to delegate, grill, hand off, test, audit a claim, and read a numerical refusal."
     }
   ]
 }

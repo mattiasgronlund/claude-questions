@@ -1,0 +1,8 @@
+{
+  "name": "guardrails",
+  "description": "The two hooks that hold a rule the prose cannot: no in-place shell patching of tracked files, and a context budget that asks for a handoff.",
+  "version": "0.1.0",
+  "author": {
+    "name": "mattiasgronlund"
+  }
+}
