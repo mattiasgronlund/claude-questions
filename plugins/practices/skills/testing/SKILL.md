@@ -96,6 +96,11 @@ cross" passed every property and refused a plain triangle. That is why
 what it can — the knots in the spline families are not all small whole numbers
 for the same reason.
 
+**A family's placement is part of its sample set.** The coordinates a family
+runs at are not one of its parameters — nothing in the family generates them
+and shrinking never touches them — so a family drawn correctly can still spend
+its whole life evaluated at the one placement that hides the answer.
+
 **Shrink parameters, never coordinates.** A `Vec<[f64; 2]>` strategy shrinks
 toward a degenerate polygon that is degenerate for an uninteresting reason, and
 teaches nothing. Generate arm counts, hole counts, extensions — things that
