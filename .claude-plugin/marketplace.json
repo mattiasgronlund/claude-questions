@@ -1,0 +1,14 @@
+{
+  "name": "mattiasgronlund-local",
+  "description": "Shared Claude Code tooling for the rcad and rscene repos, kept in one place because a copy in each is a copy that goes stale.",
+  "owner": {
+    "name": "mattiasgronlund"
+  },
+  "plugins": [
+    {
+      "name": "questions",
+      "source": "./plugins/questions",
+      "description": "Open questions for the user: one parser, a grammar that can be checked, and the skill that says how to write one."
+    }
+  ]
+}

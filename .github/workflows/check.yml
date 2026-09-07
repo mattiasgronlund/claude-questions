@@ -1,0 +1,15 @@
+name: check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  selftest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # No setup step on purpose: the parser is stdlib-only Python and the
+      # selftest is bash, so a runner already has everything. An install step
+      # is what has kept rcad's CI red for every push it has ever made.
+      - run: plugins/questions/bin/selftest.sh
