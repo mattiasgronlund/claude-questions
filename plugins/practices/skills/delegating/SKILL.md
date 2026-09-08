@@ -41,11 +41,33 @@ write sets genuinely do not overlap; it needs the `git add <path>` discipline be
 Serialising is the third option and the worst one. Take it only when lane B needs
 lane A's *output*, not merely its file.
 
-### It branches from the primary worktree's HEAD, not from `main`
+### It branches from `origin/<default-branch>` — the last *pushed* commit
 
-`isolation: "worktree"` gives the lane the branch **the primary worktree happens to
-have checked out**, and that is routinely somebody's work in flight rather than
-`main`. There is no argument to pass a base, so the only fix is in the brief.
+`isolation: "worktree"` branches from **`origin/main`, not from any local state at
+all**: not your HEAD, not local `main`. That is the `worktree.baseRef` setting, whose
+default is `fresh`, described in the settings schema as "branches from
+`origin/<default-branch>` for a clean tree". `head` is the other value, and it
+branches from local HEAD instead.
+
+**So a repo that does not push is a repo whose lanes work in the past, by exactly the
+amount it has not pushed.** On 2026-09-08 that was 36 commits in `rcad` — local `main`
+`d08bc68` against `origin/main` `3511c7e` — so a lane dispatched that day would have
+started before the plugin migration, with the deleted `.claude/skills/` still present
+and no `check-plugins` recipe to tell it otherwise.
+
+This was found in `rscene`, where two lanes were handed trees at `52b212b` and both
+happened to notice. `52b212b` is `rscene`'s `origin/main` exactly — which is what
+turned a plausible story into a measurement.
+
+An earlier draft of this section said it branched from the primary worktree's HEAD.
+That was wrong, and wrong in the direction that costs you: it sends you to check what
+the primary worktree has checked out, which changes nothing. The remedy below is
+unchanged and is still the one to use — only the reason it is needed has moved.
+
+Setting `worktree.baseRef: "head"` in `.claude/settings.json` is the other half, and
+it is worth doing in any repo whose `main` runs ahead of `origin/main`. It is not a
+substitute for naming the base: `head` makes the base *your current HEAD*, which is
+somebody's work in flight as often as not.
 
 **Name the base sha in every brief, and make the first two commands of every lane:**
 
