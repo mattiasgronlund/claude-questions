@@ -138,4 +138,4 @@ what you wrote.
 - A soak (`RCAD_SOAK_FACTOR=100`) on the nearest measured suite.
 - If a refusal rate moved, say which way and why. A rate going *down* is a
   result worth reporting, not a silent improvement.
-- `just default`.
+- `just gate`.

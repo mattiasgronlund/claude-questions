@@ -165,5 +165,7 @@ seconds rather than minutes.
 
 It is not a claim that a consuming repo's cannot go green. This line said
 `rcad`'s never had, and on 2026-09-08 run `34266469454` made that false: the
-first green on the full `just default` gate, once the clone step above was in
-place and one unrelated fault was fixed.
+first green on `rcad`'s full gate, once the clone step above was in place and
+one unrelated fault was fixed. That run invoked `just default`; the recipe is
+`just gate` from `rcad`'s `1af6f1a` the same day, and `rscene`'s is still
+`default`.

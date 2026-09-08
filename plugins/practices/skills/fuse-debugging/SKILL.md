@@ -168,6 +168,6 @@ boolean (§17.4).
 - **If a row of §39.4 moved — a refusal gone, a new one, a limit that turned out
   to be a gap — edit §39.4.** A refusal catalogue that drifts from the code is
   worse than none, because the next reader will trust it.
-- `just default`.
+- `just gate`.
 - If the fix leaves a doc comment saying something cannot be done or cannot be
   reached, run the `claim-audit` skill on it.

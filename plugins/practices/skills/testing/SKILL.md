@@ -162,4 +162,4 @@ you start fixing.
 - It counts what it did, if it can pass by doing nothing.
 - If you could not fix the bug this session, leave a compiling
   `#[ignore = "open: …"]` repro rather than a paragraph describing it.
-- `just default`.
+- `just gate`.

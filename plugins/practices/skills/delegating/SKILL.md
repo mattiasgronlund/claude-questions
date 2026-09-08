@@ -6,10 +6,15 @@ description: Split work into lanes, brief them, and run at least three at once. 
 # Running lanes
 
 Every measurement below is from `rcad`, and so are the `just` recipe names —
-`just lanes`, `just default`, `just check-hub`, `just clean-targets`, `just
+`just lanes`, `just gate`, `just check-hub`, `just clean-targets`, `just
 prune-worktrees`. They are left concrete because a rule you cannot run is a rule
 nobody follows. **Your repo's `CLAUDE.md` names its own equivalents**; where it
 is silent, the recipe here may not exist for you and the rule still does.
+
+`just gate` was `just default` until `rcad`'s `1af6f1a` on 2026-09-08, and
+`rscene`'s is still called `default`. That is the whole reason these names carry
+a repo's name: a recipe that does not exist fails loudly, which is what you
+want, where a recipe that exists and gates something else does not.
 
 ## The write-set table comes first
 
@@ -186,7 +191,7 @@ unit. Raise it for a session with `CLAUDE_CONTEXT_BUDGET`.
 
 ## Closing
 
-Run `mise exec -- just default` yourself after every batch, more than once. Then one
+Run `mise exec -- just gate` yourself after every batch, more than once. Then one
 gate agent that re-derives every load-bearing number in the lane reports from the
 tree, and only then the merge.
 
