@@ -133,9 +133,15 @@ goes in an overlay it passes to the runner:
 guardrails/bin/selftest.sh .claude/patching-cases.local.json
 ```
 
-`rcad` adds three cases that way; `rscene` adds one about bumping a pinned
-`rcad` rev. An overlay named but missing is an **error**, not an empty overlay —
-a repo's own cases quietly not running is the drift this repo exists to end.
+`rcad` adds three cases that way; `rscene` twelve, the first of them bumping a
+pinned `rcad` rev. An overlay named but missing is an **error**, not an empty
+overlay — a repo's own cases quietly not running is the drift this repo exists
+to end.
+
+The runner prints core plus overlay as a single number: 24 with no overlay, 27
+in `rcad`, 36 in `rscene`. Read out of a repo's gate, that number is not the
+count of what ships here — this file said `27 core cases` for a day because it
+was copied from `rcad`'s.
 
 Repo-specific *prose* goes in that repo's `CLAUDE.md`, which is where
 repo-specific facts already live. `delegating` and `handoff` keep `rcad`'s
