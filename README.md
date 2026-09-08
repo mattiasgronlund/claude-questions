@@ -37,7 +37,8 @@ plugins/guardrails/
   hooks/context-budget.sh
   hooks/patching-cases.json        27 core cases, repo-neutral paths
   bin/check-declared.sh            are the plugins declared, not just present
-  bin/check-declared-selftest.sh   3 cases: it skips on CI, and only on CI
+  bin/check-declared-selftest.sh   5 cases: it skips where there is no Claude
+                                   Code, and only there
   bin/selftest.sh                  those, plus 8 context budget cases, plus
                                    the declaration cases
 plugins/practices/

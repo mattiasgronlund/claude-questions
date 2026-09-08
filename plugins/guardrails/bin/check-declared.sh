@@ -22,37 +22,53 @@
 # true in the session reading it. What this rules out is the silent case — never
 # declared at all — and it says so rather than claiming more.
 #
-# **On CI there is no Claude Code to have been told, so the question has no
-# answer and this skips.** A runner supplies the plugins by pointing
-# `CLAUDE_PLUGINS_ROOT` at a clone; it has no `~/.claude`, so every reading of
-# the settings files below comes back empty and the only verdict available is a
-# false "never declared". `rcad` found this the direct way: the first push whose
-# CI ran the full gate died here in 31 s, naming all three plugins.
+# **Where there is no Claude Code to have been told, this skips rather than
+# answering.** A runner supplies the plugins by pointing `CLAUDE_PLUGINS_ROOT`
+# at a clone and has no config directory at all, so every file read below comes
+# back empty and the only verdict available is a false "never declared". `rcad`
+# found this the direct way: the first push whose CI ran the full gate died here
+# in 31 s, naming all three plugins.
 #
-# Skipping is not the same as passing, and this says which it did. The
-# alternative was to commit an `enabledPlugins` block to the repo so the runner
-# could read one out of the checkout — green, but green for a reason the runner
-# does not have, since declaring a plugin to a machine with no Claude Code
-# enables nothing.
+# **The predicate is the config directory, not `CI`.** That directory *is* the
+# installation — settings, `known_marketplaces.json`, `installed_plugins.json` —
+# so its absence is the thing itself rather than a proxy for it, and any machine
+# a human works on has one. `CI` was the first draft and is worse in both
+# directions: a human who exports it loses the check silently, and a runner that
+# does not set it gets a red nobody can act on. `CLAUDE_CONFIG_DIR` moves the
+# directory, so the skip and the reads below have to agree on where it is; they
+# did not when this was `$HOME/.claude` written out four times.
+#
+# Skipping is not the same as passing, and this says which it did — §45 is the
+# entry about tests that printed "skipping" and returned green until a green
+# suite had never read a real file.
+#
+# The alternative was for a repo to commit an `enabledPlugins` block so the
+# runner could read one out of its own checkout. That is green for a reason the
+# runner does not have: declaring a plugin to a machine with no Claude Code
+# enables nothing, and it needs `extraKnownMarketplaces` beside it, whose entire
+# test here is `has($m)` — a placeholder value would pass while asserting
+# nothing, which is the failure this script exists to catch.
 set -uo pipefail
 
 marketplace=${1:?usage: check-declared.sh <marketplace> <plugin>...}
 shift
 [ "$#" -gt 0 ] || { echo "no plugins named" >&2; exit 2; }
 
-if [ -n "${CI:-}" ]; then
-	printf 'CI is set: no Claude Code here to have been told about %s, so whether %d plugins are declared is not asked\n' \
-		"$marketplace" "$#"
+config=${CLAUDE_CONFIG_DIR:-$HOME/.claude}
+
+if [ ! -d "$config" ]; then
+	printf 'no %s, so no Claude Code to have been told about %s: the declaration check is skipped, not passed\n' \
+		"$config" "$marketplace"
 	exit 0
 fi
 
 settings=(
-	"$HOME/.claude/settings.json"
+	"$config/settings.json"
 	".claude/settings.json"
 	".claude/settings.local.json"
 )
-installed="$HOME/.claude/plugins/installed_plugins.json"
-known="$HOME/.claude/plugins/known_marketplaces.json"
+installed="$config/plugins/installed_plugins.json"
+known="$config/plugins/known_marketplaces.json"
 
 declared() {
 	local id=$1 file
