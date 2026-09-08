@@ -21,11 +21,30 @@
 # at session start, so a declaration written mid-session is true here and not yet
 # true in the session reading it. What this rules out is the silent case — never
 # declared at all — and it says so rather than claiming more.
+#
+# **On CI there is no Claude Code to have been told, so the question has no
+# answer and this skips.** A runner supplies the plugins by pointing
+# `CLAUDE_PLUGINS_ROOT` at a clone; it has no `~/.claude`, so every reading of
+# the settings files below comes back empty and the only verdict available is a
+# false "never declared". `rcad` found this the direct way: the first push whose
+# CI ran the full gate died here in 31 s, naming all three plugins.
+#
+# Skipping is not the same as passing, and this says which it did. The
+# alternative was to commit an `enabledPlugins` block to the repo so the runner
+# could read one out of the checkout — green, but green for a reason the runner
+# does not have, since declaring a plugin to a machine with no Claude Code
+# enables nothing.
 set -uo pipefail
 
 marketplace=${1:?usage: check-declared.sh <marketplace> <plugin>...}
 shift
 [ "$#" -gt 0 ] || { echo "no plugins named" >&2; exit 2; }
+
+if [ -n "${CI:-}" ]; then
+	printf 'CI is set: no Claude Code here to have been told about %s, so whether %d plugins are declared is not asked\n' \
+		"$marketplace" "$#"
+	exit 0
+fi
 
 settings=(
 	"$HOME/.claude/settings.json"

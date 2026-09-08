@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-# Both guardrails, against their cases.
+# Everything this plugin ships, against its cases.
+#
+# Three checks and not two: `check-declared.sh` joined the hooks here when it
+# grew a skip, and a skip is the one thing that has to be tested from both
+# sides. It is the only one that can fail by staying quiet.
 #
 #     selftest.sh                          the shipped cases only
 #     selftest.sh .claude/patching-cases.local.json    plus a repo's own
@@ -16,3 +20,4 @@ here=$(dirname "$(readlink -f "$0")")
 
 "$here/check-patching-hook.sh" "$@" || exit 1
 "$here/check-context-budget.sh" || exit 1
+"$here/check-declared-selftest.sh" || exit 1

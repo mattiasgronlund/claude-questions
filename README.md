@@ -35,8 +35,11 @@ plugins/guardrails/
   hooks/hooks.json                 wires both hooks on install
   hooks/no-in-place-rust-patching.sh
   hooks/context-budget.sh
-  hooks/patching-cases.json        24 core cases, repo-neutral paths
-  bin/selftest.sh                  those, plus 8 context budget cases
+  hooks/patching-cases.json        27 core cases, repo-neutral paths
+  bin/check-declared.sh            are the plugins declared, not just present
+  bin/check-declared-selftest.sh   3 cases: it skips on CI, and only on CI
+  bin/selftest.sh                  those, plus 8 context budget cases, plus
+                                   the declaration cases
 plugins/practices/
   skills/                          the nine shared skills
 ```
