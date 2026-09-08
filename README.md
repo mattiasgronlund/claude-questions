@@ -35,7 +35,7 @@ plugins/guardrails/
   hooks/hooks.json                 wires both hooks on install
   hooks/no-in-place-rust-patching.sh
   hooks/context-budget.sh
-  hooks/patching-cases.json        27 core cases, repo-neutral paths
+  hooks/patching-cases.json        24 core cases, repo-neutral paths
   bin/check-declared.sh            are the plugins declared, not just present
   bin/check-declared-selftest.sh   5 cases: it skips where there is no Claude
                                    Code, and only there
@@ -88,6 +88,39 @@ guardrails_plugin := env_var_or_default("CLAUDE_GUARDRAILS_PLUGIN", plugins_root
 `$HOME`-relative rather than `/home/mattias`, so a clone elsewhere still works,
 and the variables override it for anyone whose layout differs.
 
+### From CI
+
+A runner has no Claude Code to install a plugin into, and `$HOME/git/…` is not
+there either, so a repo whose gate runs these scripts has to supply them itself.
+Clone the marketplace and point `CLAUDE_PLUGINS_ROOT` at it — the same escape
+hatch a `check-plugins` recipe already offers a human whose checkout is
+somewhere else:
+
+```yaml
+- run: |
+    git clone --quiet https://github.com/mattiasgronlund/claude-questions.git \
+      "$RUNNER_TEMP/claude-plugins"
+    git -C "$RUNNER_TEMP/claude-plugins" checkout --quiet <full commit sha>
+    echo "CLAUDE_PLUGINS_ROOT=$RUNNER_TEMP/claude-plugins/plugins" >> "$GITHUB_ENV"
+```
+
+Outside the checkout, or it reads as untracked to the repo's own gate. No
+credentials: this is the one public repo of the three, settled on 2026-09-08 so
+that this clone needs no secret to rotate.
+
+**Pinned by full commit sha, and bumped deliberately.** Unpinned, a push here
+turns another repo red with no commit in it, and a green there stops meaning
+"this tree passes". What the pin does *not* check is that a human's installed
+plugins match it: a repo tests that three directories exist, not which version
+they hold, so local and CI can disagree about the plugin half of a gate. That is
+a limit rather than a gap — an installed plugin need not be a git checkout, so
+there is no version on the local side to compare.
+
+Pin at or above `f5f2f48`, where `check-declared.sh` learned that a machine with
+no config directory has no Claude Code to have been told anything. Below it, the
+declaration check has no answer available but "never declared" and the gate goes
+red on a runner. `rcad`'s `docs/decisions.md` §77 is the record.
+
 ### What a repo still keeps
 
 The status line wrapper above, and **its own patching cases**. The shipped 24
@@ -121,5 +154,10 @@ plugins/guardrails/bin/selftest.sh [overlay.json]
 
 No toolchain, no package manager, no network — `python3`, `bash` and `jq`. That
 is deliberate: `rcad` pins everything through `mise` because it builds a Rust
-workspace, and this repo builds nothing. It is also why CI here can go green,
-which `rcad`'s never has.
+workspace, and this repo builds nothing. It is also why CI here answers in
+seconds rather than minutes.
+
+It is not a claim that a consuming repo's cannot go green. This line said
+`rcad`'s never had, and on 2026-09-08 run `34266469454` made that false: the
+first green on the full `just default` gate, once the clone step above was in
+place and one unrelated fault was fixed.
