@@ -158,3 +158,8 @@ if [ "$failed" -gt 0 ]; then
 fi
 
 echo "$total status line cases, all as expected"
+
+# The TUI is the parser's third caller and the one a person types into.
+# It is checked here for the same reason the status line is: it is downstream of
+# the same grammar, and a copy of that grammar is what this repo exists to end.
+exec "$here/check-tui.sh"

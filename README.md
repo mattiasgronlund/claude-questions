@@ -29,7 +29,8 @@ plugins/questions/
   bin/questions.py                 the parser: sessions, find, labels, entry,
                                    compact, json, check
   bin/statusline.sh                the two-line status line, which calls it
-  bin/selftest.sh                  20 parser + 22 status line cases
+  bin/questions-tui.py             read and answer, in a terminal of its own
+  bin/selftest.sh                  20 parser + 22 status line + 22 TUI cases
   skills/asking-questions/         how to write a question, and what breaks
 plugins/guardrails/
   hooks/hooks.json                 wires both hooks on install
@@ -87,6 +88,24 @@ guardrails_plugin := env_var_or_default("CLAUDE_GUARDRAILS_PLUGIN", plugins_root
 
 `$HOME`-relative rather than `/home/mattias`, so a clone elsewhere still works,
 and the variables override it for anyone whose layout differs.
+
+### Reading the questions
+
+`just question` prints them. The TUI reads and answers them, and it is a recipe
+of its own because it needs a terminal to itself — run inside a Claude session
+it would put everything it draws into the conversation, which is the cost the
+status line exists to avoid:
+
+```just
+# justfile — run this in a second terminal, never in a session's shell mode
+question-tui *hash:
+    @python3 {{ questions_plugin }}/bin/questions-tui.py {{ hash }}
+```
+
+It never writes `open-questions.md`. It composes the answers into the text you
+would have typed, puts it on your clipboard, and you paste it into the session's
+own terminal, where it arrives as your turn — see `asking-questions` for why
+that last part is not an implementation detail.
 
 ### From CI
 
@@ -161,7 +180,9 @@ plugins/guardrails/bin/selftest.sh [overlay.json]
 No toolchain, no package manager, no network — `python3`, `bash` and `jq`. That
 is deliberate: `rcad` pins everything through `mise` because it builds a Rust
 workspace, and this repo builds nothing. It is also why CI here answers in
-seconds rather than minutes.
+seconds rather than minutes. The TUI holds that line too: stdlib `curses`, and
+OSC 52 for the clipboard rather than `xclip`, `wl-copy`, `pbcopy` and the
+platform matrix that choosing between them needs.
 
 It is not a claim that a consuming repo's cannot go green. This line said
 `rcad`'s never had, and on 2026-09-08 run `34266469454` made that false: the

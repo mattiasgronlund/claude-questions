@@ -146,15 +146,32 @@ def show_entry(path, label):
 def show_compact(path):
     """The status line's second line: open labels, consecutive runs collapsed.
 
-    A run of exactly two reads better spelled out than hyphenated. Malformed
-    entries appear as `??×n` — they are open questions that cannot be named, and
-    a count you cannot name is still a count you must see.
+    Malformed entries appear as `??×n` — they are open questions that cannot be
+    named, and a count you cannot name is still a count you must see.
     """
     entries = parse(path)
-    numbers = sorted({split_label(label)
-                      for entry in entries if entry["open"]
-                      for label in entry["labels"]})
+    labels = [label for entry in entries if entry["open"] for label in entry["labels"]]
     unnamed = sum(1 for entry in entries if entry["open"] and not entry["labels"])
+
+    segments = [collapse(labels)] if labels else []
+    if unnamed:
+        segments.append("??×%d" % unnamed)
+
+    print(", ".join(segments))
+    return 0
+
+
+def collapse(labels):
+    """Labels with consecutive runs written as ranges: `K1-K4, Q7, Q11`.
+
+    A run of exactly two reads better spelled out than hyphenated.
+
+    It is a function rather than a paragraph inside `show_compact` because the
+    TUI composes "I agree on Q1, Q2-Q8" from the same rule. Two callers, one
+    implementation — the whole reason this file exists is that a grammar with
+    two of them has no single answer to what it means.
+    """
+    numbers = sorted({split_label(label) for label in labels})
 
     segments = []
     i = 0
@@ -173,11 +190,7 @@ def show_compact(path):
         else:
             segments.append("%s-%s" % (first, last))
         i = j + 1
-    if unnamed:
-        segments.append("??×%d" % unnamed)
-
-    print(", ".join(segments))
-    return 0
+    return ", ".join(segments)
 
 
 def show_json(path):
