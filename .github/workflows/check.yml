@@ -13,3 +13,13 @@ jobs:
       # selftest is bash, so a runner already has everything. An install step
       # is what has kept rcad's CI red for every push it has ever made.
       - run: plugins/questions/bin/selftest.sh
+      # The guardrails suite had no runner of its own. It ran in `rscene`'s
+      # gate, out of a clone of this repo — so the shared cases were tested only
+      # by a repo that consumes them, and only for as long as it kept cloning.
+      # That clone is going away, and a suite whose only runner belongs to
+      # somebody else is one repo's decision from never running again.
+      #
+      # No setup step here either: bash and jq, which a runner has.
+      # `check-declared-selftest.sh` builds every home and config directory it
+      # reads, so it is indifferent to the runner's own `HOME`.
+      - run: plugins/guardrails/bin/selftest.sh
