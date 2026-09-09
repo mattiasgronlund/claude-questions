@@ -58,10 +58,10 @@ than three manifests do.
 
 ## Installing
 
-Once per machine, and the `@v0.1.0` is the point:
+Once per machine, and the `@v0.1.1` is the point:
 
 ```
-claude plugin marketplace add mattiasgronlund/claude-questions@v0.1.0
+claude plugin marketplace add mattiasgronlund/claude-questions@v0.1.1
 claude plugin install -y questions@mattiasgronlund-local
 claude plugin install -y guardrails@mattiasgronlund-local
 claude plugin install -y practices@mattiasgronlund-local
@@ -121,6 +121,22 @@ nothing.
 exists for resolution between plugins. A marketplace `ref` is one ref for the
 whole repo, so pinning to a tag named after one of three plugins would say
 something untrue about the other two.
+
+Cutting one is four things, and the last two are what make the tag true rather
+than decorative:
+
+1. bump the three `plugin.json` versions to `X.Y.Z`;
+2. update the `@vX.Y.Z` in the install command above, since a version nobody can
+   copy is a version nobody installs;
+3. commit, then `git tag -a vX.Y.Z` on that commit — the tag names a tree whose
+   manifests already agree with it, never the commit before the bump;
+4. bump the `ref` in each consuming repo's `.claude/settings.json`, which is
+   what the pin is *for*, and is the step a release without consumers does not
+   have.
+
+`v0.1.0` and `v0.1.1` are one commit apart for exactly this reason: `v0.1.0`
+was cut before the README was rewritten, so anyone pinning it and reading the
+tree got install instructions for the directory source it had replaced.
 
 ## Consuming it from a repo
 

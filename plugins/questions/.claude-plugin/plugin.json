@@ -1,7 +1,7 @@
 {
   "name": "questions",
   "description": "Open questions for the user: one parser, a grammar that can be checked, and the skill that says how to write one.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": {
     "name": "mattiasgronlund"
   }
