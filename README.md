@@ -1,7 +1,12 @@
 # claude-questions
 
-Shared Claude Code tooling for `rcad` and `rscene`, as a local plugin
-marketplace.
+Shared Claude Code tooling for `rcad` and `rscene`, as a plugin marketplace
+pinned by tag.
+
+The marketplace is still named `mattiasgronlund-local`, from the days when the
+only way to reach it was a path on one machine. The name is the identity —
+a consumer that says anything else registers nothing, silently — so renaming it
+would cost every consumer a re-registration to buy an adjective.
 
 ## Why this exists
 
@@ -53,18 +58,69 @@ than three manifests do.
 
 ## Installing
 
-The marketplace is a **directory** source, which matters: a directory-source
-marketplace runs its plugins in place rather than copying them to a
-version-stamped path under `~/.claude/plugins/cache`. That is what lets a
-`justfile` in another repo name the parser and keep naming it across version
-bumps.
+Once per machine, and the `@v0.1.0` is the point:
 
 ```
-/plugin marketplace add ~/git/mattiasgronlund/claude-questions
-/plugin install questions@mattiasgronlund-local
-/plugin install guardrails@mattiasgronlund-local
-/plugin install practices@mattiasgronlund-local
+claude plugin marketplace add mattiasgronlund/claude-questions@v0.1.0
+claude plugin install -y questions@mattiasgronlund-local
+claude plugin install -y guardrails@mattiasgronlund-local
+claude plugin install -y practices@mattiasgronlund-local
 ```
+
+Each line is load-bearing, and the following was measured against scratch
+config directories on claude 2.1.257 rather than read off a schema:
+
+- **The marketplace name is not the caller's to choose.** It comes from
+  `.claude-plugin/marketplace.json`, and an `extraKnownMarketplaces` key that
+  disagrees with it registers nothing and says nothing. `marketplace add` has no
+  name flag. So both consuming repos know these plugins by
+  `mattiasgronlund-local`, and one shared pin is what that name can carry.
+- **A committed `extraKnownMarketplaces` entry does not register itself.** Four
+  sessions with the entry at user scope and four at project scope left
+  `known_marketplaces.json` untouched. The `add` above is what writes it — at
+  user scope by default, `--scope project` to write the repo's own settings
+  file instead.
+- **`enabledPlugins` does not install an externally-sourced plugin either.**
+  Registered and cloned, four sessions in a row loaded nothing; the three
+  `install` lines made them load on the next.
+- **`ref` is a tag or a branch, never a commit.** It is handed to `git clone
+  --branch`, so a sha fails with `fatal: Remote branch … not found in upstream
+  origin`. A `sha` field is in the documented schema and is silently ignored —
+  a fresh clone carrying one still lands on the default branch. That is why the
+  pin is a tag.
+
+Two trees end up on disk and they are not interchangeable. The **marketplace
+clone**, at `~/.claude/plugins/marketplaces/mattiasgronlund-local`, is the
+pinned tree and its path does not move. The **install**, at
+`~/.claude/plugins/cache/<marketplace>/<plugin>/<version>`, is what the session
+loads and is version-stamped — so a `justfile` naming it breaks at the next
+bump. Recipes read the clone.
+
+### Working on the plugins themselves
+
+A **directory** source runs the working tree in place: no clone, no install
+step, and an edit is live in the next session.
+
+```
+claude plugin marketplace add ~/git/mattiasgronlund/claude-questions
+```
+
+It cannot be pinned, and that is the trade. It is also the escape hatch out of
+the shared pin: one repo can try a version the other has not taken by pointing
+`CLAUDE_PLUGINS_ROOT` at a checkout, without a second marketplace identity to
+keep in step.
+
+## Releasing
+
+One tag for the repo, `vX.Y.Z`, and the three `plugin.json` versions move with
+it — so a plugin's own version names the tag it came from. Before this the three
+all said `0.1.0` and always had, which is three version strings that mean
+nothing.
+
+`claude plugin tag` produces `{plugin}--v{version}`, which is per-plugin and
+exists for resolution between plugins. A marketplace `ref` is one ref for the
+whole repo, so pinning to a tag named after one of three plugins would say
+something untrue about the other two.
 
 ## Consuming it from a repo
 
@@ -74,17 +130,28 @@ is written into a tracked file:
 ```bash
 # .claude/statusline.sh, reduced to a wrapper — a plugin cannot supply a
 # statusLine, so a path in the repo has to exist. It must not become a copy.
-root=${CLAUDE_PLUGINS_ROOT:-$HOME/git/mattiasgronlund/claude-questions/plugins}
+config=${CLAUDE_CONFIG_DIR:-$HOME/.claude}
+clone=$config/plugins/marketplaces/mattiasgronlund-local/plugins
+[ -d "$clone" ] || clone=$HOME/git/mattiasgronlund/claude-questions/plugins
+root=${CLAUDE_PLUGINS_ROOT:-$clone}
 plugin=${CLAUDE_QUESTIONS_PLUGIN:-$root/questions}
 ```
 
 ```just
 # justfile
+claude_config := env_var_or_default("CLAUDE_CONFIG_DIR", home_directory() / ".claude")
+marketplace_clone := claude_config / "plugins/marketplaces/mattiasgronlund-local/plugins"
 plugins_root := env_var_or_default("CLAUDE_PLUGINS_ROOT", \
-    home_directory() / "git/mattiasgronlund/claude-questions/plugins")
+    if path_exists(marketplace_clone) == "true" { marketplace_clone } \
+    else { home_directory() / "git/mattiasgronlund/claude-questions/plugins" })
 questions_plugin := env_var_or_default("CLAUDE_QUESTIONS_PLUGIN", plugins_root / "questions")
 guardrails_plugin := env_var_or_default("CLAUDE_GUARDRAILS_PLUGIN", plugins_root / "guardrails")
 ```
+
+Three places, in that order: the override, then the pinned marketplace clone,
+then a plain checkout. The pin is the default and the working tree is the
+exception you ask for — which is the opposite of how it read before there was a
+pin to prefer.
 
 `$HOME`-relative rather than `/home/mattias`, so a clone elsewhere still works,
 and the variables override it for anyone whose layout differs.
@@ -109,36 +176,37 @@ that last part is not an implementation detail.
 
 ### From CI
 
-A runner has no Claude Code to install a plugin into, and `$HOME/git/…` is not
-there either, so a repo whose gate runs these scripts has to supply them itself.
-Clone the marketplace and point `CLAUDE_PLUGINS_ROOT` at it — the same escape
-hatch a `check-plugins` recipe already offers a human whose checkout is
-somewhere else:
+A consuming repo's CI does not need these plugins, and until 2026-09-09
+`rscene`'s cloned them anyway. Asked what the clone bought, each of its three
+users turned out to be checking nothing a runner has:
 
-```yaml
-- run: |
-    git clone --quiet https://github.com/mattiasgronlund/claude-questions.git \
-      "$RUNNER_TEMP/claude-plugins"
-    git -C "$RUNNER_TEMP/claude-plugins" checkout --quiet <full commit sha>
-    echo "CLAUDE_PLUGINS_ROOT=$RUNNER_TEMP/claude-plugins/plugins" >> "$GITHUB_ENV"
-```
+- `check-plugins` asks whether Claude Code has been *told about* three plugins.
+  A runner has no Claude Code, and the clone was creating the very directories
+  the check then found — a job satisfying its own precondition.
+- `check-hooks` tests a **PreToolUse** hook. A hook fires in a session; there is
+  no session on a runner, so the cases ran against a hook that could not have
+  fired either way.
+- `check-questions-selftest` ran *this* repo's suite out of a clone the job
+  made, which tests this tree rather than the consumer's.
 
-Outside the checkout, or it reads as untracked to the repo's own gate. No
-credentials: this is the one public repo of the three, settled on 2026-09-08 so
-that this clone needs no secret to rotate.
+So the recipes skip where there is no config directory, and say **"skipped, not
+passed"** when they do — the predicate `check-declared.sh` already uses. The
+scripts stay runnable on a runner for anyone who wants them: point
+`CLAUDE_PLUGINS_ROOT` at a clone, outside the checkout or it reads as untracked.
+No credentials needed; this is the one public repo of the three, settled on
+2026-09-08 so that a clone needs no secret to rotate.
 
-**Pinned by full commit sha, and bumped deliberately.** Unpinned, a push here
-turns another repo red with no commit in it, and a green there stops meaning
-"this tree passes". What the pin does *not* check is that a human's installed
-plugins match it: a repo tests that three directories exist, not which version
-they hold, so local and CI can disagree about the plugin half of a gate. That is
-a limit rather than a gap — an installed plugin need not be a git checkout, so
-there is no version on the local side to compare.
+What the consumer genuinely loses is its **own** overlay patching cases —
+`rscene`'s twelve — which now run when a human runs the gate and nowhere else.
+The shared cases lost nothing and gained a runner: `.github/workflows/check.yml`
+here runs `plugins/guardrails/bin/selftest.sh`, which before that day existed
+only inside `rscene`'s gate. A suite whose only runner belongs to a repo that
+merely consumes it is one decision away from never running again.
 
-Pin at or above `f5f2f48`, where `check-declared.sh` learned that a machine with
-no config directory has no Claude Code to have been told anything. Below it, the
-declaration check has no answer available but "never declared" and the gate goes
-red on a runner. `rcad`'s `docs/decisions.md` §77 is the record.
+`f5f2f48` is where `check-declared.sh` learned that a machine with no config
+directory has no Claude Code to have been told anything; below it the check had
+no verdict available but a false "never declared". `rcad`'s
+`docs/decisions.md` §77 is the record. Every tag from `v0.1.0` on is above it.
 
 ### What a repo still keeps
 
@@ -152,15 +220,22 @@ goes in an overlay it passes to the runner:
 guardrails/bin/selftest.sh .claude/patching-cases.local.json
 ```
 
-`rcad` adds three cases that way; `rscene` twelve, the first of them bumping a
-pinned `rcad` rev. An overlay named but missing is an **error**, not an empty
-overlay — a repo's own cases quietly not running is the drift this repo exists
-to end.
+`rscene` adds twelve cases that way, the first of them bumping a pinned `rcad`
+rev. An overlay named but missing is an **error**, not an empty overlay — a
+repo's own cases quietly not running is the drift this repo exists to end.
 
-The runner prints core plus overlay as a single number: 24 with no overlay, 27
-in `rcad`, 36 in `rscene`. Read out of a repo's gate, that number is not the
-count of what ships here — this file said `27 core cases` for a day because it
-was copied from `rcad`'s.
+The runner prints core plus overlay as a single number: 24 with no overlay, 36
+in `rscene`. Read out of a repo's gate, that number is not the count of what
+ships here — this file said `27 core cases` for a day because it was copied from
+`rcad`'s.
+
+`rcad` has **not** migrated. It still runs its own `.claude/hooks/` copies of
+both hooks and its own 25-case file, and its `question` recipe is a second
+implementation of the parser rather than a call to it — which is exactly the
+arrangement that let the status lines drift apart in the first place. Three of
+those 25 cases are genuinely `rcad`'s and become its overlay; the rest are the
+shared 24 under different names. That migration is the piece of work this one
+does not do.
 
 Repo-specific *prose* goes in that repo's `CLAUDE.md`, which is where
 repo-specific facts already live. `delegating` and `handoff` keep `rcad`'s
