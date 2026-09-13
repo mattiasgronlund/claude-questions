@@ -42,9 +42,10 @@ plugins/guardrails/
   hooks/no-in-place-rust-patching.sh
   hooks/context-budget.sh
   hooks/patching-cases.json        24 core cases, repo-neutral paths
-  bin/check-declared.sh            are the plugins declared, not just present
-  bin/check-declared-selftest.sh   5 cases: it skips where there is no Claude
-                                   Code, and only there
+  bin/check-declared.sh            are the plugins declared, not just present,
+                                   and is the registered ref the one asked for
+  bin/check-declared-selftest.sh   10 cases: it skips where there is no Claude
+                                   Code and only there, and it reads the pin
   bin/selftest.sh                  those, plus 8 context budget cases, plus
                                    the declaration cases
 plugins/practices/
@@ -58,10 +59,10 @@ than three manifests do.
 
 ## Installing
 
-Once per machine, and the `@v0.1.1` is the point:
+Once per machine, and the `@v0.2.0` is the point:
 
 ```
-claude plugin marketplace add mattiasgronlund/claude-questions@v0.1.1
+claude plugin marketplace add mattiasgronlund/claude-questions@v0.2.0
 claude plugin install -y questions@mattiasgronlund-local
 claude plugin install -y guardrails@mattiasgronlund-local
 claude plugin install -y practices@mattiasgronlund-local
@@ -95,6 +96,15 @@ pinned tree and its path does not move. The **install**, at
 `~/.claude/plugins/cache/<marketplace>/<plugin>/<version>`, is what the session
 loads and is version-stamped — so a `justfile` naming it breaks at the next
 bump. Recipes read the clone.
+
+Leaving the `@vX.Y.Z` off that first command is the mistake worth naming,
+because everything still works: the marketplace registers, the plugins install,
+the skills load, and the machine is on the default branch. `check-declared.sh`
+compares the ref a repo's `.claude/settings.json` asks for against the one
+`known_marketplaces.json` actually holds, and fails when two versions disagree
+— a difference that otherwise reads exactly like agreement. A **directory**
+source has no ref and is named rather than failed: it is the escape hatch, and
+the line is there so nobody stands in it without noticing.
 
 ### Working on the plugins themselves
 

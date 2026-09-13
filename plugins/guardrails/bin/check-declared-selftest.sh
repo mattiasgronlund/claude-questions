@@ -41,6 +41,45 @@ cat >"$dir/repo/.claude/settings.json" <<'JSON'
 }
 JSON
 
+# A repo that asks for a version, which is what makes the pin checkable at all.
+# `pinned-repo` names v1.0.0 throughout; what changes between the cases below is
+# the config directory it is read against.
+mkdir -p "$dir/pinned-repo/.claude"
+cat >"$dir/pinned-repo/.claude/settings.json" <<'JSON'
+{
+  "extraKnownMarketplaces": {
+    "acme-local": {
+      "source": { "source": "github", "repo": "acme/plugins", "ref": "v1.0.0" }
+    }
+  },
+  "enabledPlugins": { "alpha@acme-local": true, "beta@acme-local": true }
+}
+JSON
+
+# Four machines, differing only in what `marketplace add` was run with. The
+# plugins are declared in the repo above in every one, so the only thing any of
+# these cases can be reporting on is the ref.
+registered() {
+	mkdir -p "$dir/$1/.claude/plugins"
+	cat >"$dir/$1/.claude/plugins/known_marketplaces.json"
+}
+registered home-v1 <<'JSON'
+{ "acme-local": { "source": { "source": "github", "repo": "acme/plugins", "ref": "v1.0.0" },
+  "installLocation": "/somewhere", "lastUpdated": "2026-09-13T00:00:00.000Z" } }
+JSON
+registered home-v2 <<'JSON'
+{ "acme-local": { "source": { "source": "github", "repo": "acme/plugins", "ref": "v2.0.0" },
+  "installLocation": "/somewhere", "lastUpdated": "2026-09-13T00:00:00.000Z" } }
+JSON
+registered home-noref <<'JSON'
+{ "acme-local": { "source": { "source": "github", "repo": "acme/plugins" },
+  "installLocation": "/somewhere", "lastUpdated": "2026-09-13T00:00:00.000Z" } }
+JSON
+registered home-directory <<'JSON'
+{ "acme-local": { "source": { "source": "directory", "path": "/home/someone/acme" },
+  "installLocation": "/home/someone/acme", "lastUpdated": "2026-09-13T00:00:00.000Z" } }
+JSON
+
 failed=0
 total=0
 
@@ -88,6 +127,28 @@ expect repo bare-home home/.claude 0 "declared to Claude Code" \
 
 expect repo home nowhere 0 "skipped, not passed" \
 	"the reads follow CLAUDE_CONFIG_DIR, so the skip must follow it too"
+
+# The pin. Every case below has the plugins declared, so a wrong verdict here
+# cannot be blamed on the declaration half.
+expect pinned-repo home-v1 home-v1/.claude 0 "pinned at v1.0.0" \
+	"the ref asked for and the ref registered agree, and the line is the evidence"
+
+expect pinned-repo home-v2 home-v2/.claude 1 "asks for v1.0.0 and acme-local is registered at v2.0.0" \
+	"two versions that disagree is the failure the pin exists to make visible"
+
+# The one that actually happens: `marketplace add acme/plugins`, with the
+# `@v1.0.0` left off. The registration is valid, the plugins load, and the
+# machine is on the default branch. Nothing but this line says so.
+expect pinned-repo home-noref home-noref/.claude 1 "registered at the default branch" \
+	"a missing ref is a version difference, not an absence of one"
+
+expect pinned-repo home-directory home-directory/.claude 0 "escape hatch and not the pin" \
+	"a working tree has no ref, and pointing one at a repo is supported: name it, do not fail it"
+
+# The repo that asks for nothing still has to pass. Most repos never pin, and a
+# check that reported on every one of them would be noise ending in a filter.
+expect repo home-v2 home-v2/.claude 0 "declared to Claude Code" \
+	"no ref asked for is nothing to compare, and nothing to compare is not a fault"
 
 if [ "$failed" -gt 0 ]; then
 	echo "$failed of $total declaration cases came out wrong"

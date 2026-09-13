@@ -48,6 +48,24 @@
 # enables nothing, and it needs `extraKnownMarketplaces` beside it, whose entire
 # test here is `has($m)` — a placeholder value would pass while asserting
 # nothing, which is the failure this script exists to catch.
+#
+# **Last, the pin.** A repo that commits an `extraKnownMarketplaces` entry with
+# a `ref` is asking for a version, and asking is all it can do: a committed
+# entry does not register itself, so the ref that governs is whatever `claude
+# plugin marketplace add` was run with on this machine. Leave the `@vX.Y.Z` off
+# that command and you are on the default branch with nothing saying so — a
+# version difference that reads exactly like agreement, which is the failure
+# this whole repo was extracted to end.
+#
+# Only the repo's own settings files are read for what is *asked*. The
+# user-level file is the machine's own choice, and comparing a machine's
+# declaration against itself asserts nothing.
+#
+# A **directory** source is named rather than failed. It has no ref because it
+# is a working tree, and pointing one at a repo is the supported way to try a
+# version the pin has not taken yet. Failing there would make the escape hatch
+# cost a red gate, and the reason for the line is that an escape hatch nobody
+# can see they are standing in is how two repos drift apart.
 set -uo pipefail
 
 marketplace=${1:?usage: check-declared.sh <marketplace> <plugin>...}
@@ -119,6 +137,54 @@ or install them interactively with /plugin install <name>@$marketplace.
 Settings are read at session start, so a session already running needs a restart.
 EOF
 	exit 1
+fi
+
+# The ref this repo asks for, out of its own settings files and not the
+# machine's. `// empty` twice: an entry may be absent, and an older one may be
+# the string shorthand rather than an object, which has no ref to compare.
+asked=
+for file in ".claude/settings.json" ".claude/settings.local.json"; do
+	[ -r "$file" ] || continue
+	asked=$(jq -c --arg m "$marketplace" \
+		'.extraKnownMarketplaces[$m].source | select(type == "object") // empty' \
+		"$file" 2>/dev/null)
+	[ -n "$asked" ] && break
+done
+
+asked_ref=
+[ -n "$asked" ] && asked_ref=$(jq -r '.ref // empty' <<<"$asked")
+
+if [ -n "$asked_ref" ]; then
+	got=$(jq -c --arg m "$marketplace" '.[$m].source // empty' "$known" 2>/dev/null)
+	got_kind=
+	got_ref=
+	if [ -n "$got" ]; then
+		got_kind=$(jq -r '.source // empty' <<<"$got")
+		got_ref=$(jq -r '.ref // empty' <<<"$got")
+	fi
+
+	if [ "$got_kind" = directory ]; then
+		printf '%s asks for %s, and %s is registered as a directory source at %s: a working tree is what loads here, which is the escape hatch and not the pin\n' \
+			"$file" "$asked_ref" "$marketplace" \
+			"$(jq -r '.path // "an unnamed path"' <<<"$got")"
+	elif [ "$got_ref" != "$asked_ref" ]; then
+		repo=$(jq -r '.repo // empty' <<<"$asked")
+		printf '%s asks for %s and %s is registered at %s\n' \
+			"$file" "$asked_ref" "$marketplace" \
+			"${got_ref:-the default branch}"
+		cat <<EOF
+
+A committed entry does not register itself, so the ref that governs is the one
+\`marketplace add\` was run with. Re-run it with the version this repo asks for:
+
+  claude plugin marketplace add ${repo:-<owner/repo>}@$asked_ref
+
+Settings are read at session start, so a session already running needs a restart.
+EOF
+		exit 1
+	else
+		printf '%s pinned at %s, as %s asks\n' "$marketplace" "$asked_ref" "$file"
+	fi
 fi
 
 printf '%d plugins declared to Claude Code via %s\n' "$#" "$marketplace"
