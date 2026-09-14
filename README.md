@@ -62,10 +62,10 @@ than three manifests do.
 
 ## Installing
 
-Once per machine, and the `@v0.2.2` is the point:
+Once per machine, and the `@v0.2.3` is the point:
 
 ```
-claude plugin marketplace add mattiasgronlund/claude-questions@v0.2.2
+claude plugin marketplace add mattiasgronlund/claude-questions@v0.2.3
 claude plugin install -y questions@mattiasgronlund-local
 claude plugin install -y guardrails@mattiasgronlund-local
 claude plugin install -y practices@mattiasgronlund-local
