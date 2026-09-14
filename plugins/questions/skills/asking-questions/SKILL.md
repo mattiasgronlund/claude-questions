@@ -49,17 +49,34 @@ between them is yours and no tool reads it.
 - **`- [x]` and `→ answered: …`** when the answer comes. Name who answered and
   when; a relayed approval is not an approval.
 
+## Writing it
+
+**A round goes in one `Write`, not an `Edit` per entry.** Nobody else writes this
+file, so there is nothing to merge and no reason to go entry by entry. Over the
+week of 2026-09-07 it was written with 263 `Edit` calls against 57 `Write`s,
+median edit 374 bytes, at a median context of 150 000: $28 of editing to carry a
+few hundred bytes at a time. Hold the whole file, change what changed, write it
+once, and run the checker in the same call.
+
 ## Reading it back
 
 `just question` lists the sessions with something open. `just question <hash>`
-lists that session's labels and headings, and announces a count of grammar
-violations under the listing. `just question <hash> Q11` prints that one entry
-in full.
+prints **every open entry in that session's file, in full** — body, options and
+recommendation — and names each grammar violation under the questions
+themselves, so the check and the read are one call. Naming labels prints those
+and nothing else, answered or not: `just question <hash> Q11 Q19`. `--labels` is
+one line per entry, `--all` includes the answered, `--json` is for a program.
 
-`just question-tui` is the same file to read and answer in, in a terminal of its
-own. It never writes here: it composes the answers into the text the user would
-have typed and they paste it back, so an answer still arrives as their own turn
-and this file is still written by one writer.
+Whole bodies are the default because of who calls it. A person has a finite
+screen and cheap keystrokes; you have the reverse, and a second call to fetch a
+body you skipped bills the whole conversation again — the largest file in the
+corpus is 8 687 bytes, which is cheaper to carry than one avoidable round trip
+is to take.
+
+`just question-tui` is the one a person types: the same file to read and answer
+in, in a terminal of its own. It never writes here: it composes the answers into
+the text the user would have typed and they paste it back, so an answer still
+arrives as their own turn and this file is still written by one writer.
 
 That last part is the whole reason it pastes rather than posts. A session's
 inbox socket would have delivered the answers, but a message arriving that way

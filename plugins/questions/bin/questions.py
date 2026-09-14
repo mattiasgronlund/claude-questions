@@ -301,10 +301,10 @@ def parse(path):
 
     An entry runs from its `- [ ]` line to the next one. Two things end it
     early, and both were bugs: a fenced block may contain a `- [ ]` example — it
-    is how CLAUDE.md documents this very format — and a `##` section heading
-    belongs to the document, not to the entry above it. Ten entries in the
-    corpus had a heading glued into them, and the file that first proposed this
-    grammar was one of them within a turn of being written.
+    is how the `asking-questions` skill documents this very format — and a `##`
+    section heading belongs to the document, not to the entry above it. Ten
+    entries in the corpus had a heading glued into them, and the file that first
+    proposed this grammar was one of them within a turn of being written.
     """
     entries = []
     current = None
