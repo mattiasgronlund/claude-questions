@@ -101,6 +101,27 @@ python3 "$q" entry "$file" M5 >/dev/null 2>&1 &&
 same "the open labels collapsed wrongly" \
 	"$(python3 "$q" compact "$file")" "K1, Q7, Q11, ??×1"
 
+# --- reading several at once, which is what the recipe does by default now
+same "one entry with two labels printed more than once" \
+	"$(python3 "$q" entry "$file" Q7 Q11 | grep -c 'indented body')" "1"
+
+total=$((total + 1))
+python3 "$q" entry "$file" Q11 Q99 >/dev/null 2>&1 &&
+	fail "a missing label among present ones passed, returning a quietly shorter answer"
+
+open_bodies=$(python3 "$q" entries "$file")
+holds "the open entries did not come back with their bodies" "$open_bodies" 'indented body'
+lacks "an answered entry was printed as open" "$open_bodies" 'settled, and must not'
+
+# The whole reason full bodies are the default. An entry with no parsable label
+# is open and unreachable everywhere else: `compact` can only say `??×1`, the
+# label listing only `??` with a line number, and the TUI drops it. This is the
+# one view that puts it where someone can fix it.
+holds "a malformed entry was dropped from the full listing" "$open_bodies" 'handoff Q1'
+
+all_bodies=$(python3 "$q" entries "$file" --all)
+holds "--all left out an answered entry" "$all_bodies" 'settled, and must not'
+
 total=$((total + 1))
 python3 "$q" find "$root" zzzz >/dev/null 2>&1 &&
 	fail "a hash matching no session was accepted"

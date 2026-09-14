@@ -40,15 +40,56 @@ reject() {
 	fi
 }
 
-# The shipped default, with nothing in the environment. This is the case that
-# notices the two defaults — the hook's and the status line's — drifting apart.
-# They are defaults in two plugins now, which can be installed one without the
-# other, so neither can read the other's number and this is what holds them.
+# The budget lives in one file now — `context-budget.default`, in guardrails —
+# and these three cases are the only ones that reach it. Every `want` below goes
+# through `render`, which sets `CLAUDE_CONTEXT_BUDGET`, so the resolution walk in
+# `statusline.sh` never runs there. It used to be one case pinning `250k`, which
+# is why lowering the budget to 200k turned it red: it asserted the number rather
+# than the property. The number is now read from the same file the status line
+# reads, so it cannot go stale again, and the two halves are checked separately —
+# that the walk finds the file, and that it says so when it does not.
+plugins_tree=$(cd "$here/../.." && pwd)
+budget_file="$plugins_tree/guardrails/hooks/context-budget.default"
+
+# `CLAUDE_PLUGINS_ROOT` is set rather than left to the ambient walk. The walk's
+# later steps — the marketplace clone, then `$HOME` — are properties of the
+# machine the suite runs on, and a case that passes because of where it ran is
+# the shape `docs/decisions.md` §77.6 is about.
+resolved() {
+	jq -n --arg d "$work" --argjson t "$1" \
+		'{model: {display_name: "Opus"}, context_window: {total_input_tokens: $t}, workspace: {project_dir: $d}}' |
+		env -u CLAUDE_CONTEXT_BUDGET CLAUDE_PLUGINS_ROOT="$2" CLAUDE_QUESTIONS_FILE=/nowhere \
+			"$line" | sed -e 's/\x1b\[[0-9;]*m//g'
+}
+
 total=$((total + 1))
-shipped=$(jq -n --arg d "$work" '{model: {display_name: "Opus"}, context_window: {total_input_tokens: 125000}, workspace: {project_dir: $d}}' |
-	env -u CLAUDE_CONTEXT_BUDGET CLAUDE_QUESTIONS_FILE=/nowhere "$line" | sed -e 's/\x1b\[[0-9;]*m//g')
-if ! grep -qE '125k/250k .* 50%' <<<"$shipped"; then
-	printf 'wanted the shipped default to read 125k/250k at 50%%, got: %s\n' "$shipped"
+if [ ! -r "$budget_file" ]; then
+	printf 'no budget default at %s, so the resolution cases cannot run\n' "$budget_file"
+	failed=$((failed + 1))
+else
+	shipped_budget=$(cat "$budget_file")
+	half=$((shipped_budget / 2))
+	shipped=$(resolved "$half" "$plugins_tree")
+	if ! grep -qE "$((half / 1000))k/$((shipped_budget / 1000))k .* 50%" <<<"$shipped"; then
+		printf 'wanted the resolved default to read %sk/%sk at 50%%, got: %s\n' \
+			"$((half / 1000))" "$((shipped_budget / 1000))" "$shipped"
+		failed=$((failed + 1))
+	fi
+fi
+
+# The other half of the walk. Until 2026-09-14 this printed `· 125k` and nothing
+# else, so a status line with no budget behind it was indistinguishable from one
+# with a budget — the failure the whole file exists to catch, sitting in the file
+# that catches it.
+unresolved=$(resolved 125000 /nowhere)
+total=$((total + 1))
+if ! grep -qE 'no budget: no context-budget.default under /nowhere' <<<"$unresolved"; then
+	printf 'wanted an unresolved budget to name the file it wanted, got: %s\n' "$unresolved"
+	failed=$((failed + 1))
+fi
+total=$((total + 1))
+if ! grep -qE '125k' <<<"$unresolved"; then
+	printf 'wanted the figure to survive an unresolved budget, got: %s\n' "$unresolved"
 	failed=$((failed + 1))
 fi
 

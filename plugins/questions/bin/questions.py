@@ -56,8 +56,12 @@ def main(argv):
         return find_session(args[0], args[1])
     if command == "labels" and len(args) == 1:
         return show_labels(args[0])
-    if command == "entry" and len(args) == 2:
-        return show_entry(args[0], args[1])
+    if command == "entry" and len(args) >= 2:
+        return show_entries(args[0], args[1:])
+    if command == "entries" and len(args) == 1:
+        return show_open(args[0], False)
+    if command == "entries" and args[1:] == ["--all"]:
+        return show_open(args[0], True)
     if command == "compact" and len(args) == 1:
         return show_compact(args[0])
     if command == "json" and len(args) == 1:
@@ -73,7 +77,8 @@ def usage():
         "usage: questions.py sessions <root>\n"
         "       questions.py find <root> <hash>\n"
         "       questions.py labels|compact|json|check <file>\n"
-        "       questions.py entry <file> <label>\n"
+        "       questions.py entries <file> [--all]\n"
+        "       questions.py entry <file> <label>...\n"
     )
     return 2
 
@@ -133,14 +138,51 @@ def show_labels(path):
     return 0
 
 
-def show_entry(path, label):
-    """One entry in full, addressed by any of its labels."""
-    for entry in parse(path):
-        if label in entry["labels"]:
-            sys.stdout.write("".join(entry["lines"]))
-            return 0
-    sys.stderr.write("no question labelled %s in %s\n" % (label, path))
-    return 1
+def show_entries(path, labels):
+    """The named entries in full, in the order the file has them.
+
+    An entry can carry several labels — `**Q7 / Q11**` is the case §59.2 was
+    about — so asking for both prints it once. What is deduped is the entry, not
+    the label; matching on labels alone prints the body twice and reads as two
+    questions that happen to be identical.
+
+    A label that names nothing fails rather than being skipped, because the
+    caller asked for it by name and a quietly shorter answer is the one shape
+    that cannot be noticed.
+    """
+    entries = parse(path)
+    wanted = set()
+    for label in labels:
+        found = [i for i, entry in enumerate(entries) if label in entry["labels"]]
+        if not found:
+            sys.stderr.write("no question labelled %s in %s\n" % (label, path))
+            return 1
+        wanted.update(found)
+    for i in sorted(wanted):
+        sys.stdout.write("".join(entries[i]["lines"]))
+    return 0
+
+
+def show_open(path, include_answered):
+    """Every open entry in full — what `just question <hash>` prints.
+
+    Open-only is the default because every other subcommand already means that:
+    `sessions` counts `e["open"]` and `compact` lists open labels. The file is
+    called `open-questions.md`.
+
+    **A malformed entry prints here and nowhere else.** It has no labels, so
+    `compact` can only say `??×1` and the TUI drops it outright
+    (`questions-tui.py:493` keeps `if e["labels"]`). Printing bodies is what puts
+    it in front of someone with its line number, where it can be fixed. That is
+    the reason this is the default and the economy is the lesser half.
+    """
+    entries = [e for e in parse(path) if include_answered or e["open"]]
+    if not entries:
+        sys.stderr.write("no open questions in %s\n" % path)
+        return 0
+    for entry in entries:
+        sys.stdout.write("".join(entry["lines"]))
+    return 0
 
 
 def show_compact(path):

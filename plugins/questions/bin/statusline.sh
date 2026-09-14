@@ -78,10 +78,14 @@ if [ -n "$used" ] && [ -n "$budget" ]; then
 	[ "$pct" -ge 100 ] && note=" hand off"
 	line1="$line1 ${dim}·${off} ${colour}$((used / 1000))k/$((budget / 1000))k ${bar} ${pct}%${note}${off}"
 elif [ -n "$used" ]; then
-	# The budget file could not be resolved. Show the figure anyway — it is
-	# still visible every turn, which is the point — rather than going dark
-	# because one guardrails install detail failed.
-	line1="$line1 ${dim}·${off} $((used / 1000))k"
+	# The budget could not be resolved, so the line says which file it wanted
+	# rather than printing the figure alone. A bare `· 125k` does not read as a
+	# status line with something missing from it; it reads as an ordinary status
+	# line, which is the miscount-looks-like-a-count failure this file is checked
+	# for. `check-question-file.sh` answers the same cross-plugin question by
+	# naming what it looked for and exiting 2 — a status line cannot exit, so it
+	# names it here instead.
+	line1="$line1 ${dim}·${off} ${yellow}$((used / 1000))k no budget: no context-budget.default under $guardrails${off}"
 fi
 printf '%s\n' "$line1"
 
