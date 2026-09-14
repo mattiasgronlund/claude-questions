@@ -8,8 +8,10 @@
 # that nobody needed the model to read. The status line is terminal UI. It never
 # reaches the model, so it can be re-read as often as you like.
 #
-# Line 1 tracks the same budget `context-budget.sh` enforces, so the handoff is
-# visible on the way in rather than announced on arrival.
+# Line 1 tracks the same budget `context-budget.sh` enforces — reading the same
+# `context-budget.default` file rather than carrying its own copy of the number,
+# so the handoff is visible on the way in rather than announced on arrival, and
+# lowering the budget is one edit rather than two kept in step by a comment.
 #
 # Line 2 is the open question numbers and nothing else. The questions live in
 # the session's own scratchpad, never in the tree: on 2026-09-05 four sessions
@@ -19,7 +21,23 @@
 set -uo pipefail
 
 payload=$(cat)
-budget=${CLAUDE_CONTEXT_BUDGET:-250000}
+
+# The number itself lives in `context-budget.default`, in the guardrails
+# plugin, and nowhere else — resolved the same way `CLAUDE_QUESTIONS_PLUGIN` is
+# resolved below: an override, then the pinned marketplace clone, then a plain
+# checkout. `budget` is left empty rather than falling back to a second
+# hardcoded number here; that would just move the two-copies problem this
+# replaces rather than end it.
+config=${CLAUDE_CONFIG_DIR:-$HOME/.claude}
+clone=$config/plugins/marketplaces/mattiasgronlund-local/plugins
+[ -d "$clone" ] || clone=$HOME/git/mattiasgronlund/claude-questions/plugins
+plugins_root=${CLAUDE_PLUGINS_ROOT:-$clone}
+guardrails=${CLAUDE_GUARDRAILS_PLUGIN:-$plugins_root/guardrails}
+budget=${CLAUDE_CONTEXT_BUDGET:-}
+if [ -z "$budget" ]; then
+	budget=$(cat "$guardrails/hooks/context-budget.default" 2>/dev/null)
+	case "$budget" in '' | *[!0-9]*) budget='' ;; esac
+fi
 
 get() { jq -r "$1 // empty" <<<"$payload" 2>/dev/null; }
 
@@ -44,7 +62,7 @@ line1="${model:-claude}"
 case "$used" in
 '' | *[!0-9]*) used='' ;;
 esac
-if [ -n "$used" ]; then
+if [ -n "$used" ] && [ -n "$budget" ]; then
 	pct=$((used * 100 / budget))
 	filled=$((pct / 10))
 	[ "$filled" -gt 10 ] && filled=10
@@ -59,6 +77,11 @@ if [ -n "$used" ]; then
 	note=""
 	[ "$pct" -ge 100 ] && note=" hand off"
 	line1="$line1 ${dim}·${off} ${colour}$((used / 1000))k/$((budget / 1000))k ${bar} ${pct}%${note}${off}"
+elif [ -n "$used" ]; then
+	# The budget file could not be resolved. Show the figure anyway — it is
+	# still visible every turn, which is the point — rather than going dark
+	# because one guardrails install detail failed.
+	line1="$line1 ${dim}·${off} $((used / 1000))k"
 fi
 printf '%s\n' "$line1"
 

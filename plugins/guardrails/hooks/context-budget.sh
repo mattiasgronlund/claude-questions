@@ -12,14 +12,37 @@
 # removes 45M. The number is a dial, not a discovery; it started at 300k and was
 # turned down once the handoff was cheap enough to take more often.
 #
+# Turned down again to 200k on a later week's numbers: 35% of that week's token
+# spend was calls billed above 200k of context, and only 16% above the 250k this
+# shipped with — so 250k was missing more than twice what it caught. A call at
+# 300k costs 2.6x the same call at the 117k median. A handoff costs one call to
+# write and a ~46k floor to resume, so it repays itself after about ten calls —
+# well below how long a session runs once past the budget, which is why the dial
+# moved rather than the handoff cost being the thing to fix.
+#
+# The number lives in `context-budget.default`, beside this script, and nowhere
+# else. `statusline.sh` draws the same figure and reads that file too, rather
+# than carrying its own copy — two defaults kept in step by a comment is the
+# exact drift this repo exists to end.
+#
 # Fires once per session, on the two events where handing off is actually the
 # next thing that could happen: when the user submits new work, and when a turn
 # ends. Never in a subagent — a lane is short by construction and has nowhere to
 # hand off to.
 set -uo pipefail
 
+here=$(dirname "$(readlink -f "$0")")
+budget=${CLAUDE_CONTEXT_BUDGET:-}
+if [ -z "$budget" ]; then
+	budget=$(cat "$here/context-budget.default" 2>/dev/null)
+	case "$budget" in '' | *[!0-9]*)
+		echo "context-budget.sh: can't read a default from $here/context-budget.default" >&2
+		exit 1
+		;;
+	esac
+fi
+
 payload=$(cat)
-budget=${CLAUDE_CONTEXT_BUDGET:-250000}
 
 # A lane has an agent_id; it is not the session this is about.
 [ -n "$(jq -r '.agent_id // empty' <<<"$payload")" ] && exit 0
