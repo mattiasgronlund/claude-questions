@@ -38,7 +38,7 @@ plugins/questions/
   bin/selftest.sh                  20 parser + 22 status line + 22 TUI cases
   skills/asking-questions/         how to write a question, and what breaks
 plugins/guardrails/
-  hooks/hooks.json                 wires both hooks on install
+  hooks/hooks.json                 wires the three hooks on install
   hooks/no-in-place-rust-patching.sh
   hooks/context-budget.sh
   hooks/patching-cases.json        24 core cases, repo-neutral paths

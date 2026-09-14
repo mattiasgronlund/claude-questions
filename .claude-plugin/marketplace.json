@@ -13,7 +13,7 @@
     {
       "name": "guardrails",
       "source": "./plugins/guardrails",
-      "description": "The two hooks that hold a rule the prose cannot: no in-place shell patching of tracked files, and a context budget that asks for a handoff."
+      "description": "The three hooks that hold a rule the prose cannot: no in-place shell patching of tracked files, a question file checked right after it is written, and a context budget that asks for a handoff."
     },
     {
       "name": "practices",
