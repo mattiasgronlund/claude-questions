@@ -58,6 +58,8 @@ def main(argv):
         return show_compose(args[1])
     if args[:1] == ["sessions"] and len(args) == 2:
         return show_sessions(args[1])
+    if args[:2] == ["sessions", "--visible"] and len(args) == 3:
+        return show_sessions(args[2], visible=True)
     if args[:1] in (["-h"], ["--help"]):
         return usage(0)
 
@@ -75,7 +77,9 @@ def usage(code=2):
     sys.stderr.write(__doc__.splitlines()[0] + "\n\n")
     sys.stderr.write(
         "usage: questions-tui.py [<hash>]        read and answer, interactively\n"
-        "       questions-tui.py sessions <root> the picker's rows, as text\n"
+        "       questions-tui.py sessions <root> every row, as text\n"
+        "       questions-tui.py sessions --visible <root>\n"
+        "                                        the rows the picker would show\n"
         "       questions-tui.py compose <spec>  the text a batch of answers makes\n"
     )
     return code
@@ -114,7 +118,22 @@ def agents():
     preferring the supported interface over the one that happens to work.
 
     It is a name source and not a liveness oracle: it lists sessions that ended
-    months ago with `"status": "idle"`. The pid settles that instead.
+    months ago with `"status": "idle"`. The pid settles that instead — when
+    there is one. A background agent may be listed with a `state` and no `pid`
+    at all, and the caller reads that as "listed, unchecked" rather than as
+    dead.
+
+    **Keyed by every id a scratchpad directory might carry.** A scratchpad is
+    named for the session id the process was started with, and for a forked or
+    background agent that is *not* the row's `sessionId`: the listing reports
+    the session it was forked from there and puts the agent's own id in `id`.
+    The rscene agent running as `--session-id f50bcc67-...` was listed as
+    `sessionId 31d34760-...` with `id: "f50bcc67"` while its questions sat under
+    `f50bcc67-.../scratchpad`, so the join missed, the row came back unknown,
+    and the picker hid a live session with seven open questions behind `press d`
+    — with the other 64 dead ones, which is the same as hiding them all. The
+    `id` is the first segment of the real session id, so it goes in as a key of
+    its own and the caller tries it when the full one does not match.
 
     Returning nothing is a normal answer. `claude` may not be on the path at
     all, and the caller treats an empty result as "liveness unknown" rather than
@@ -138,6 +157,12 @@ def agents():
         for row in rows:
             if isinstance(row, dict) and row.get("sessionId"):
                 known[row["sessionId"]] = row
+                # Eight hex characters are not a session id, so this key can
+                # never shadow an exact one. `setdefault` because two agents
+                # forked from the same session would collide here, and the
+                # first row is as good an answer as the last.
+                if row.get("id"):
+                    known.setdefault(row["id"], row)
     return known
 
 
@@ -166,6 +191,11 @@ def sessions(root, known):
     working directory when it is known, because the directory slug's last
     segment turns `claude-questions` into `questions` and the header you paste
     should name the repo you would name.
+
+    Whether the listing knew the session at all is kept beside whether its pid
+    is running, because they are different answers: a session nobody lists is
+    one that ended a month ago, while a listed session with no pid is one this
+    program cannot check and must not therefore bury.
     """
     found = []
     pattern = os.path.join(root, "*", "*", "scratchpad", "open-questions.md")
@@ -178,7 +208,7 @@ def sessions(root, known):
             continue
         session = os.path.basename(os.path.dirname(os.path.dirname(path)))
         slug = os.path.basename(os.path.dirname(os.path.dirname(os.path.dirname(path))))
-        row = known.get(session) or {}
+        row = known.get(session) or known.get(session.split("-", 1)[0]) or {}
         cwd = row.get("cwd")
         found.append({
             "session": session,
@@ -189,19 +219,61 @@ def sessions(root, known):
             "mtime": os.path.getmtime(path),
             "open": sum(len(e["labels"]) or 1 for e in entries if e["open"]),
             "total": len(entries),
-            # Unknown is its own answer. A session `claude agents` never
-            # mentioned may be one it cannot see rather than one that ended.
+            "listed": bool(row),
+            # Unknown is its own answer, and it arrives two ways: a session
+            # `claude agents` never mentioned may be one it cannot see rather
+            # than one that ended, and a listed one may carry no pid to check.
             "live": alive(row["pid"]) if row.get("pid") is not None else None,
         })
     found.sort(key=lambda row: row["mtime"], reverse=True)
     return found
 
 
-def show_sessions(root):
-    """The picker's rows as plain text, which is how they are tested."""
+def showable(rows, known):
+    """The sessions the picker puts on screen, out of everything on disk.
+
+    `/tmp` is swept at 30 days, so the glob finds a month of finished sessions
+    — 41 of them on the machine this was written on, against five that were
+    running. Showing them all is the same as showing nothing.
+
+    So a session is hidden for one of two reasons: its pid is gone, or the
+    agent listing has never heard of it. Being listed with no pid to check is
+    neither, and a background agent may be listed exactly that way — a `state`,
+    a name, and no pid. That case used to fall through to "unknown", which this
+    rule read as dead, so the rule that exists to bury 41 finished sessions
+    would bury a blocked agent waiting on an answer.
+
+    With no `claude` on the path every session is unlisted, and hiding them all
+    would leave an empty picker with nothing to explain it, so in that case the
+    rule turns itself off.
+    """
+    return [row for row in rows
+            if row["open"] and row["live"] is not False
+            and (row["listed"] or not known)]
+
+
+def state_of(row):
+    """What this program knows about a session's liveness, in one word.
+
+    `listed` and `unknown` are both "no pid was checked", and they are told
+    apart because only one of them is a reason to hide the row.
+    """
+    if row["live"] is not None:
+        return "live" if row["live"] else "dead"
+    return "listed" if row["listed"] else "unknown"
+
+
+def show_sessions(root, visible=False):
+    """The picker's rows as plain text, which is how they are tested.
+
+    `--visible` applies the picker's own hiding rule, because that rule is not
+    a detail of drawing: it is what decides whether a question reaches anyone,
+    and it hid every session on this machine once already.
+    """
     known = agents()
-    for row in sessions(root, known):
-        state = "live" if row["live"] else ("dead" if row["live"] is False else "unknown")
+    rows = sessions(root, known)
+    for row in showable(rows, known) if visible else rows:
+        state = state_of(row)
         clock = time.strftime("%H:%M", time.localtime(row["mtime"]))
         print("  %-6.6s %3d open  %s  %-16.16s %-16.16s %s"
               % (row["hash"], row["open"], clock, row["repo"], row["name"], state))
@@ -360,21 +432,10 @@ class App:
     # --- what is on screen
 
     def visible_rows(self):
-        """What `just question` would show: live sessions with something open.
-
-        `/tmp` is swept at 30 days, so the glob finds a month of finished
-        sessions — 41 of them on the machine this was written on, against five
-        that were running. Showing them all is the same as showing nothing.
-
-        Unknown is treated as dead here, but only when the agent listing came
-        back at all. With no `claude` on the path every session is unknown, and
-        hiding them all would leave an empty picker with nothing to explain it,
-        so in that case the rule turns itself off.
-        """
+        """What the picker shows, which `sessions --visible` prints and tests."""
         if self.reveal:
             return self.rows
-        return [row for row in self.rows
-                if row["open"] and (row["live"] or (row["live"] is None and not self.known))]
+        return showable(self.rows, self.known)
 
     def visible_entries(self):
         if self.reveal:
@@ -546,7 +607,7 @@ class App:
             mark = "▸ " if chosen else "  "
             attr = curses.A_REVERSE if chosen else curses.A_NORMAL
             if self.screen_kind == SESSIONS:
-                state = "live" if item["live"] else ("dead" if item["live"] is False else "?")
+                state = state_of(item)
                 text = "%s%-6.6s %3d open  %s  %-18.18s %-16.16s %s" % (
                     mark, item["hash"], item["open"],
                     time.strftime("%H:%M", time.localtime(item["mtime"])),

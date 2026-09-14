@@ -172,6 +172,57 @@ listing=$(CLAUDE_QUESTIONS_AGENTS_JSON="$work/none.json" python3 "$tui" sessions
 holds "a session the agent list does not know was dropped" "$listing" '766405'
 holds "an unknown session was called dead" "$listing" 'unknown$'
 
+# A forked or background agent's scratchpad is named for the session id it was
+# started with, and `claude agents --json` does not report that in `sessionId` —
+# it reports the session the agent was forked from, and puts the agent's own id
+# in `id`. This is f50bcc67, which sat blocked on seven open questions in rscene
+# while the picker said "nothing here" and counted it among 65 hidden.
+#
+# It gets a directory of its own rather than reusing one of the two above,
+# because the `id` is only the first segment: two fixtures differing in their
+# last segment would both join to it and the case would pass without proving
+# the join.
+forked="$root/-home-mattias-git-mattiasgronlund-rscene/f50bcc67-eed4-4677-94de-41a003ed38f2/scratchpad"
+mkdir -p "$forked"
+printf '%s\n' '- [ ] **Q1** — one?' >"$forked/open-questions.md"
+jq -nc --argjson pid $$ \
+	'[{pid: $pid, id: "f50bcc67", cwd: "/home/mattias/git/mattiasgronlund/rscene",
+	   kind: "background", sessionId: "31d34760-7c88-4453-ac1d-1794e2733777",
+	   name: "forked", state: "blocked"}]' \
+	>"$work/forked.json"
+listing=$(CLAUDE_QUESTIONS_AGENTS_JSON="$work/forked.json" python3 "$tui" sessions "$root")
+holds "a forked agent was not joined by its own id" "$listing" 'f50bcc.*forked'
+holds "a forked agent whose pid is running was not marked live" "$listing" 'forked.*live$'
+lacks "the short id joined a session it does not name" "$listing" '766405.*forked'
+visible=$(CLAUDE_QUESTIONS_AGENTS_JSON="$work/forked.json" python3 "$tui" sessions --visible "$root")
+holds "the picker hid a live forked agent with open questions" "$visible" 'f50bcc'
+
+# A background agent may be listed with a `state` and no `pid` at all. There is
+# nothing to check, which is not the same as having checked and found it gone.
+# f50bcc67 did have a pid, so this is the half of the bug it did not need — but
+# ecf19a1c was in the same listing with no pid, and would have been buried by it.
+jq -nc '[{id: "f50bcc67", cwd: "/home/mattias/git/mattiasgronlund/rscene",
+	  kind: "background", sessionId: "ecf19a1c-2fcd-4c15-91f8-2bc68e7226cc",
+	  name: "no-pid", state: "blocked"}]' \
+	>"$work/nopid.json"
+listing=$(CLAUDE_QUESTIONS_AGENTS_JSON="$work/nopid.json" python3 "$tui" sessions "$root")
+holds "a listed session with no pid was not told apart from an unlisted one" \
+	"$listing" 'no-pid.*listed$'
+lacks "a session with no pid to check was called dead" "$listing" 'dead$'
+visible=$(CLAUDE_QUESTIONS_AGENTS_JSON="$work/nopid.json" python3 "$tui" sessions --visible "$root")
+holds "the picker hid a listed session it had no pid to check" "$visible" 'f50bcc'
+
+# The other three ways in, so that widening the rule did not widen it to
+# everything: a pid that is gone stays hidden, a session no listing has heard
+# of stays hidden, and with no listing at all nothing is hidden.
+visible=$(CLAUDE_QUESTIONS_AGENTS_JSON="$work/dead.json" python3 "$tui" sessions --visible "$root")
+lacks "the picker showed a session whose pid is gone" "$visible" '766405'
+visible=$(CLAUDE_QUESTIONS_AGENTS_JSON="$work/forked.json" python3 "$tui" sessions --visible "$root")
+lacks "the picker showed a session no agent listing knows" "$visible" '766405'
+visible=$(CLAUDE_QUESTIONS_AGENTS_JSON="$work/none.json" python3 "$tui" sessions --visible "$root")
+holds "an empty agent listing hid every session instead of turning the rule off" \
+	"$visible" '766405'
+
 # A malformed agents file is a normal answer, not a traceback: the listing still
 # has to come out, because the questions are readable whatever `claude` says.
 printf '%s\n' 'not json at all' >"$work/broken.json"
