@@ -123,8 +123,24 @@ were dispatched one at a time when nothing in the write-set table said they had 
 be. Lanes conflict only when their *write* sets overlap; a file two lanes merely
 read is not a conflict.
 
-Pick the model per lane: a mechanical sweep or an audit is Sonnet work; a lane that
-has to reason about the arithmetic is Opus.
+Pick the model per lane. A week's spend split subagent-Opus at $300 of $1,163
+(26%) against subagent-Sonnet at $35 (3%), and Sonnet prices at $2/$10 per MTok
+against Opus's $5/$25 — so the sentence "a mechanical sweep or an audit is
+Sonnet work" was true and had not moved those numbers, because nothing said
+which lanes it covered. Default these kinds to Sonnet, by name, so a dispatcher
+can match a lane against the list rather than judge it fresh each time:
+
+- replaying a corpus
+- reproducing and classifying a fuzz artifact
+- bisecting
+- running the gate and reporting
+- sweeping references after a renumber
+- resolving a `decisions.md` conflict down to a marker deletion
+- disk and worktree sweeps
+
+Stays Opus: anything reasoning about a numerical refusal, a published bound, or
+whether a claim of impossibility holds. Those are judgment calls about what the
+arithmetic means, not sweeps over what it already says.
 
 ## The brief
 
