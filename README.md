@@ -31,23 +31,26 @@ and §63.7 named this extraction as the stage that follows it.
 ```
 .claude-plugin/marketplace.json    the marketplace, named mattiasgronlund-local
 plugins/questions/
-  bin/questions.py                 the parser: sessions, find, labels, entry,
-                                   compact, json, check
+  bin/questions.py                 the parser: sessions, find, labels, entries,
+                                   entry, compact, json, check
   bin/statusline.sh                the two-line status line, which calls it
   bin/questions-tui.py             read and answer, in a terminal of its own
-  bin/selftest.sh                  20 parser + 22 status line + 22 TUI cases
+  bin/selftest.sh                  26 parser + 24 status line + 32 TUI cases
   skills/asking-questions/         how to write a question, and what breaks
 plugins/guardrails/
   hooks/hooks.json                 wires the three hooks on install
   hooks/no-in-place-rust-patching.sh
+  hooks/check-question-file.sh     the grammar, checked right after a write
   hooks/context-budget.sh
+  hooks/context-budget.default     the budget, in one place — the status line
+                                   reads this same file rather than a copy
   hooks/patching-cases.json        24 core cases, repo-neutral paths
   bin/check-declared.sh            are the plugins declared, not just present,
                                    and is the registered ref the one asked for
   bin/check-declared-selftest.sh   10 cases: it skips where there is no Claude
                                    Code and only there, and it reads the pin
   bin/selftest.sh                  those, plus 8 context budget cases, plus
-                                   the declaration cases
+                                   the declaration cases, plus 5 question-hook
 plugins/practices/
   skills/                          the nine shared skills
 ```
@@ -59,10 +62,10 @@ than three manifests do.
 
 ## Installing
 
-Once per machine, and the `@v0.2.1` is the point:
+Once per machine, and the `@v0.2.2` is the point:
 
 ```
-claude plugin marketplace add mattiasgronlund/claude-questions@v0.2.1
+claude plugin marketplace add mattiasgronlund/claude-questions@v0.2.2
 claude plugin install -y questions@mattiasgronlund-local
 claude plugin install -y guardrails@mattiasgronlund-local
 claude plugin install -y practices@mattiasgronlund-local
