@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# Runs the questions grammar checker right after a write to `open-questions.md`,
+# so a violation is caught in the same turn that made it rather than on the next
+# `just question-check` call.
+#
+# Measured this week: 128 `question-check` calls costing $10.6, whose MEDIAN
+# result was 31 bytes — the checker prints nothing on a clean file, so almost
+# the entire cost was the round-trip of asking. Folding the check into the write
+# removes that round-trip on the common, clean-file case, where this hook prints
+# nothing either.
+#
+# The checker lives in the `questions` plugin, not here, so it is resolved the
+# same way `statusline.sh` resolves it: `CLAUDE_QUESTIONS_PLUGIN`, then
+# `CLAUDE_PLUGINS_ROOT`, then the marketplace clone under
+# `$CLAUDE_CONFIG_DIR/plugins/marketplaces/mattiasgronlund-local/plugins`, then
+# `$HOME/git/mattiasgronlund/claude-questions/plugins`. A hardcoded path here
+# breaks the moment CI (or any repo) sets `CLAUDE_PLUGINS_ROOT`, and it breaks
+# SILENTLY — a hook that cannot find its checker looks exactly like a clean
+# file, which is worse than the round-trip this hook exists to remove. So a
+# resolution failure is reported, not swallowed: see the `checker not found`
+# case below.
+set -uo pipefail
+
+payload=$(cat)
+file=$(jq -r '.tool_input.file_path // empty' <<<"$payload")
+
+case "$file" in
+*open-questions.md) ;;
+*) exit 0 ;;
+esac
+
+config=${CLAUDE_CONFIG_DIR:-$HOME/.claude}
+clone=$config/plugins/marketplaces/mattiasgronlund-local/plugins
+[ -d "$clone" ] || clone=$HOME/git/mattiasgronlund/claude-questions/plugins
+root=${CLAUDE_PLUGINS_ROOT:-$clone}
+plugin=${CLAUDE_QUESTIONS_PLUGIN:-$root/questions}
+checker=$plugin/bin/questions.py
+
+if [ ! -r "$checker" ]; then
+	echo "check-question-file.sh: can't find the questions checker at $checker (checked CLAUDE_QUESTIONS_PLUGIN, CLAUDE_PLUGINS_ROOT, the marketplace clone, then \$HOME/git/mattiasgronlund/claude-questions) — $file was not checked" >&2
+	exit 2
+fi
+
+[ -r "$file" ] || exit 0
+
+problems=$(python3 "$checker" check "$file" 2>&1)
+[ -z "$problems" ] && exit 0
+
+jq -n --arg reason "$(printf '`just question-check` found a grammar violation in %s:\n\n%s' "$file" "$problems")" \
+	'{decision: "block", reason: $reason}'
+exit 0
