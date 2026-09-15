@@ -258,13 +258,24 @@ in `rscene`. Read out of a repo's gate, that number is not the count of what
 ships here — this file said `27 core cases` for a day because it was copied from
 `rcad`'s.
 
-`rcad` has **not** migrated. It still runs its own `.claude/hooks/` copies of
-both hooks and its own 25-case file, and its `question` recipe is a second
-implementation of the parser rather than a call to it — which is exactly the
-arrangement that let the status lines drift apart in the first place. Three of
-those 25 cases are genuinely `rcad`'s and become its overlay; the rest are the
-shared 24 under different names. That migration is the piece of work this one
-does not do.
+`rcad` has migrated, and the split landed as this file predicted it would. It
+ran its own `.claude/hooks/` copies of both hooks and its own 25-case file, and
+its `question` recipe was a second implementation of the parser rather than a
+call to it — which is exactly the arrangement that let the status lines drift
+apart in the first place. The prediction here was that three of those 25 cases
+were genuinely `rcad`'s and would become its overlay, the rest being the shared
+24 under different names. `.claude/patching-cases.local.json` on `rcad`'s `main`
+holds **exactly three**, its `.claude/hooks/` holds neither shared hook, and
+`justfile:1405` reads `q="{{questions_plugin}}/bin/questions.py"`.
+
+This paragraph is in the past tense on purpose. It sat here saying the migration
+had not happened for three tags after it had — v0.2.1, v0.2.2 and v0.2.3 all
+shipped it — because no check in this repo can see `rcad`'s tree, and the two
+releases that went out in between were cut by someone who verified the file
+lists above it and not the prose in it. A sentence about another repo is only
+ever checked by a person who happens to read it. A past-tense one with a number
+in it has nothing left to drift away from; a future-tense one is a standing
+promise that somebody keeps looking.
 
 Repo-specific *prose* goes in that repo's `CLAUDE.md`, which is where
 repo-specific facts already live. `delegating` and `handoff` keep `rcad`'s
