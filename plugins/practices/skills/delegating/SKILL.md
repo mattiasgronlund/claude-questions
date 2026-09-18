@@ -198,12 +198,23 @@ dispatcher read that answer as the end, and a second agent went into the same
 worktree 100 seconds later — while the first woke to question two. Nothing about
 the report said which of the three it was.
 
-**The dispatcher has a budget too, and it is 250k tokens.** The lane cap works — 51
-lanes on 2026-09-05, median 17 minutes, none over 45. The dispatchers had no cap and
-spent 485M input tokens over 1994 turns, 97% of it re-reading context, while writing
-almost no code. The `guardrails` plugin's context budget hook says so once when the
-line is crossed; call the `handoff` skill then, rather than at the end of the next
+**The dispatcher has a budget too, and the `guardrails` plugin's context budget hook
+is what says so.** The lane cap works — 51 lanes on 2026-09-05, median 17 minutes,
+none over 45. The dispatchers had no cap and spent 485M input tokens over 1994 turns,
+97% of it re-reading context, while writing almost no code. The hook fires once when
+the line is crossed; call the `handoff` skill then, rather than at the end of the next
 unit. Raise it for a session with `CLAUDE_CONTEXT_BUDGET`.
+
+**The number itself lives in `guardrails/hooks/context-budget.default` and nowhere
+else, this sentence included.** It used to be repeated here, and the repetition went
+stale the way every copy does: `3a27299` lowered the default to 200k and did not move
+the copy, so **v0.2.2 and v0.2.3 both shipped a skill telling dispatchers they had 25%
+more room than the hook would give them** — and the skill is the thing a fresh
+dispatcher reads *before* dispatching, where the hook only speaks once the line is
+already crossed. An rscene session crossed it on 2026-09-18 and found the
+disagreement. The hook's own comment already says the default lives in one file
+because "two defaults kept in step by a comment is the exact drift this repo exists to
+end"; a skill quoting the figure is that same drift wearing prose.
 
 ## Closing
 
