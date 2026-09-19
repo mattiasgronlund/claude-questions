@@ -38,12 +38,14 @@
 #
 # So: two changes, and the dial left alone.
 #
-# **A rung, not a sentinel.** The warning repeats every `step` of further growth.
-# The session that ignores it is the expensive case by definition, and a sentinel
-# meant that was the one session guaranteed never to hear from it again. 25k is
-# the smallest step that is not a nag — on that week it is one extra warning in
-# the median session past the budget and four in the worst, against $67 still
-# ahead of the first repeat.
+# **A rung, not a sentinel.** The warning repeats every `step` of growth **past
+# the first warning**. The session that ignores it is the expensive case by
+# definition, and a sentinel meant that was the one session guaranteed never to
+# hear from it again. 25k is the smallest step that is not a nag — on that week it
+# is one extra warning in the median session past the budget and four in the
+# worst, against $67 still ahead of the first repeat. Counting rungs from the
+# budget instead is what shipped first and what the comment beside the arithmetic
+# below says not to do.
 #
 # **PostToolUse, not only the turn boundaries.** `tail -n 400 | jq` costs 14 ms
 # on the largest transcript here (3.4 MB), so the check can afford to run on
@@ -93,15 +95,24 @@ case "$tokens" in
 esac
 [ "$tokens" -lt "$budget" ] && exit 0
 
-# Which rung of the ladder this context is on: 0 at the budget, 1 a step above
-# it, and so on. The file holds the highest rung already spoken for, so a session
-# hears the warning once per step and not once per turn.
-rung=$(((tokens - budget) / step))
+# Which rung of the ladder this context is on, counted from **where the first
+# warning landed** rather than from the budget, so the second warning always
+# comes a whole step after the first. The file holds that first figure and the
+# highest rung already spoken for.
+#
+# Counting from the budget was the first version and it was wrong within two
+# turns of shipping. The session that crosses deep inside a turn — the case the
+# PostToolUse arm exists for — is first told at, say, 72k past the line, which is
+# already rung 2, and is then told again 3k later on reaching rung 3. Measured on
+# the session that wrote this: warned at 272,565 and again at 277,124, two turns
+# running. A ladder anchored to where you started climbing cannot do that.
 state="${TMPDIR:-/tmp}/claude-context-budget-$session"
-last=$(cat "$state" 2>/dev/null)
-case "$last" in '' | *[!0-9]*) last=-1 ;; esac
+read -r first last <<<"$(cat "$state" 2>/dev/null)"
+case "${first:-}" in '' | *[!0-9]*) first=$tokens ;; esac
+case "${last:-}" in '' | *[!0-9]*) last=-1 ;; esac
+rung=$(((tokens - first) / step))
 [ "$rung" -le "$last" ] && exit 0
-printf '%s\n' "$rung" >"$state"
+printf '%s %s\n' "$first" "$rung" >"$state"
 
 pretty=$(printf "%'d" "$tokens")
 cap=$(printf "%'d" "$budget")
@@ -113,9 +124,9 @@ if [ "$last" -lt 0 ]; then
 	headline="Context budget passed at $tokens tokens — handoff suggested."
 	opening="Context is at $pretty input tokens, past the $cap budget. Raise it for a session with CLAUDE_CONTEXT_BUDGET."
 else
-	grown=$(printf "%'d" $((rung * step)))
-	headline="Context budget still growing: $tokens tokens, $grown past it — handoff overdue."
-	opening="Context is at $pretty input tokens — $grown past the $cap budget, and this is not the first time you have been told. Every response since the first warning has been billed at more than a fresh session would pay for the same call."
+	grown=$(printf "%'d" $((tokens - first)))
+	headline="Context budget still growing: $tokens tokens, $grown more since the first warning — handoff overdue."
+	opening="Context is at $pretty input tokens, past the $cap budget — $grown more than when you were first told, and that first time was not heeded. Every response since has been billed at more than a fresh session would pay for the same call."
 fi
 
 if [ "$event" = "PostToolUse" ]; then

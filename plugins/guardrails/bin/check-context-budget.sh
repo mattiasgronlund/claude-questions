@@ -72,6 +72,28 @@ if [ -z "$one" ] || [ -n "$again" ] || [ -z "$two" ] || [ "$one" = "$two" ]; the
 	failed=$((failed + 1))
 fi
 
+# The rung is counted from the first warning, not from the budget. A session that
+# crosses deep inside a turn is first told well past the line — 72k past it, on
+# the session that found this — and counting from the budget then puts the next
+# rung a few thousand tokens away, so it is told again on the very next turn.
+# Here: first warning at 290k against a 250k budget, then 300k, which is 40k and
+# 50k past the budget (two different rungs, the old arithmetic) but only 10k
+# apart (the same rung, which is the one that matters).
+total=$((total + 1))
+usage 290000 >"$work/deep1.jsonl"
+usage 300000 >"$work/deep2.jsonl"
+deep() {
+	jq -n --arg t "$work/$1" '{session_id:"deep", transcript_path:$t, hook_event_name:"Stop"}' |
+		TMPDIR="$work" CLAUDE_CONTEXT_BUDGET=250000 CLAUDE_CONTEXT_BUDGET_STEP=25000 "$hook"
+}
+crossed=$(deep deep1.jsonl)
+nagged=$(deep deep2.jsonl)
+if [ -z "$crossed" ] || [ -n "$nagged" ]; then
+	echo "wanted a step measured from the first warning, not from the budget:"
+	echo "  first='${crossed:0:20}' 10k later='${nagged:0:20}'"
+	failed=$((failed + 1))
+fi
+
 # Nine points of that week were billed inside the turn that crossed the budget,
 # where no Stop runs: the worst turn grew from 57k to 246k across 105 responses.
 # So the check runs after a tool call too, with advice that fits being mid-turn.
