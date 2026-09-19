@@ -116,11 +116,19 @@ esac
 # version that wrote it, so a format that changes has to say what the old one
 # means. Here: the figure is unrecoverable, so the ladder restarts from now and
 # the next warning is a repeat, which is the one thing that is certainly true.
+#
+# **A baseline under the budget is not a baseline.** The only figure this script
+# ever writes there is one it has just compared against the budget and found
+# greater, so anything smaller was written by something else — v0.3.3 reading a
+# v0.3.2 file, and then persisting the 3 it had misread, which is the shape that
+# reached `319,479 more than when you were first told`. Fixing the reader was not
+# enough because the bad figure was already on disk, wearing the new format. The
+# invariant is cheap to state and the check is the same branch as the upgrade.
 state="${TMPDIR:-/tmp}/claude-context-budget-$session"
 read -r first last <<<"$(cat "$state" 2>/dev/null)"
 case "${first:-}" in '' | *[!0-9]*) first= ;; esac
 case "${last:-}" in '' | *[!0-9]*) last= ;; esac
-if [ -z "$first" ] || [ -z "$last" ]; then
+if [ -z "$first" ] || [ -z "$last" ] || [ "$first" -lt "$budget" ]; then
 	warned_before=$first
 	first=$tokens
 	last=-1

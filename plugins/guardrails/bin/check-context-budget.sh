@@ -115,6 +115,27 @@ if [ -n "$quiet" ] || [ "${later#Context budget still growing}" = "$later" ]; th
 	failed=$((failed + 1))
 fi
 
+# Fixing the reader did not undo what the bad reader had already written: v0.3.3
+# persisted the misread rung as a baseline, in the new two-field format, so v0.3.4
+# trusted it and told this hook's author it was "319,479 more than when you were
+# first told". A baseline under the budget was never written by this script, which
+# is the invariant the check rests on.
+total=$((total + 1))
+usage 325010 >"$work/corrupt1.jsonl"
+usage 351010 >"$work/corrupt2.jsonl"
+printf '3 11\n' >"$work/claude-context-budget-corrupt"
+corrupt() {
+	jq -n --arg t "$work/$1" '{session_id:"corrupt", transcript_path:$t, hook_event_name:"Stop"}' |
+		TMPDIR="$work" CLAUDE_CONTEXT_BUDGET=250000 CLAUDE_CONTEXT_BUDGET_STEP=25000 "$hook"
+}
+hushed=$(corrupt corrupt1.jsonl)
+sane=$(corrupt corrupt2.jsonl | jq -r '.systemMessage')
+if [ -n "$hushed" ] || ! grep -q '26,000 more since the first warning' <<<"$sane"; then
+	echo "wanted a baseline under the budget to be rejected, then a sane repeat, got"
+	echo "  now='${hushed:0:40}' a step later='$sane'"
+	failed=$((failed + 1))
+fi
+
 # Nine points of that week were billed inside the turn that crossed the budget,
 # where no Stop runs: the worst turn grew from 57k to 246k across 105 responses.
 # So the check runs after a tool call too, with advice that fits being mid-turn.
