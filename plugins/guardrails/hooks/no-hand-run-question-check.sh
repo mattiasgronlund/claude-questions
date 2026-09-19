@@ -24,7 +24,7 @@
 # real reason to check a file it did not just write can run `questions.py check`
 # directly. Reaching past the recipe is the signal that the reason was real.
 #
-# `docs/decisions.md` §151.
+# `docs/decisions.md` §152.
 set -uo pipefail
 
 . "$(dirname "$(readlink -f "$0")")/lib/shell-code.sh"

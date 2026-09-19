@@ -64,7 +64,7 @@ fi
 #
 # The line names the open labels because it costs nothing to carry them — the
 # file has just been parsed — and because it is the one thing a session would
-# otherwise read the file back for. `docs/decisions.md` §151.
+# otherwise read the file back for. `docs/decisions.md` §152.
 open=$(python3 "$checker" compact "$file" 2>/dev/null)
 [ -n "$open" ] || open="nothing open"
 

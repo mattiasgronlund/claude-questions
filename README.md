@@ -42,7 +42,7 @@ plugins/guardrails/
   hooks/no-in-place-rust-patching.sh
   hooks/no-hand-run-question-check.sh
                                    the checker already ran on the write, so the
-                                   recipe is refused — §151
+                                   recipe is refused — §152
   hooks/lib/shell-code.sh          a command minus its heredoc bodies, wanted by
                                    both PreToolUse hooks and so kept in one place
   hooks/check-question-file.sh     the grammar, checked right after a write, and

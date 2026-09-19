@@ -105,7 +105,7 @@ question — and it was written before the hook existed. In the week of
 and **three** found anything: $17.58 spent re-asking a question the write had
 already answered, because a hook that says nothing on a clean file looks exactly
 like a hook that is not installed. It says something now. `docs/decisions.md`
-§151.
+§152.
 
 If you have a real reason to check a file you did not just write, reach past the
 recipe to the checker: `python3 "$CLAUDE_PLUGINS_ROOT/questions/bin/questions.py"

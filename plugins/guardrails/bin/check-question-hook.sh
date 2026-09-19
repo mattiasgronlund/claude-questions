@@ -6,7 +6,7 @@
 # The one case worth naming: a hook that cannot resolve the checker and a hook
 # that resolved it against a clean file used to print nothing alike. Without a
 # case that deliberately breaks resolution, a typo in the fallback chain reads
-# as "every file is clean" forever. A clean file now says so — which is §151's
+# as "every file is clean" forever. A clean file now says so — which is §152's
 # change and why the silence cases below are worth more than they look: the
 # *unresolvable* case must still print nothing, because the one thing worse
 # than silence is a hook that says "clean" without having looked.
@@ -80,7 +80,7 @@ resolved "a file that is not open-questions.md stays silent" \
 # A clean file says so, and says it where the model can read it. Plain stdout
 # on a PostToolUse hook goes to the debug log and nowhere else, so a
 # confirmation that is not in `additionalContext` is the old silence wearing a
-# hat. That is the whole of §151's first half, so it is checked by field and
+# hat. That is the whole of §152's first half, so it is checked by field and
 # not by substring.
 total=$((total + 1))
 out=$(payload "$work/clean-open-questions.md" | CLAUDE_QUESTIONS_PLUGIN="$questions_plugin" \
