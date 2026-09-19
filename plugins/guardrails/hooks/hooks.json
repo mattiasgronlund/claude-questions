@@ -1,5 +1,5 @@
 {
-  "description": "In-place patching refused on the way in; a question file checked right after it is written; a context budget that asks for a handoff on the way out.",
+  "description": "In-place patching refused on the way in, and a question-check the write already ran; a question file checked right after it is written; a context budget that asks for a handoff on the way out.",
   "hooks": {
     "PreToolUse": [
       {
@@ -8,6 +8,11 @@
           {
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/no-in-place-rust-patching.sh\"",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/no-hand-run-question-check.sh\"",
             "timeout": 10
           }
         ]

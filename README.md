@@ -38,9 +38,15 @@ plugins/questions/
   bin/selftest.sh                  26 parser + 24 status line + 32 TUI cases
   skills/asking-questions/         how to write a question, and what breaks
 plugins/guardrails/
-  hooks/hooks.json                 wires the three hooks on install
+  hooks/hooks.json                 wires the four hooks on install
   hooks/no-in-place-rust-patching.sh
-  hooks/check-question-file.sh     the grammar, checked right after a write
+  hooks/no-hand-run-question-check.sh
+                                   the checker already ran on the write, so the
+                                   recipe is refused — §151
+  hooks/lib/shell-code.sh          a command minus its heredoc bodies, wanted by
+                                   both PreToolUse hooks and so kept in one place
+  hooks/check-question-file.sh     the grammar, checked right after a write, and
+                                   a clean file says so rather than nothing
   hooks/context-budget.sh
   hooks/context-budget.default     the budget, in one place — the status line
                                    reads this same file rather than a copy
@@ -50,7 +56,7 @@ plugins/guardrails/
   bin/check-declared-selftest.sh   10 cases: it skips where there is no Claude
                                    Code and only there, and it reads the pin
   bin/selftest.sh                  those, plus 8 context budget cases, plus
-                                   the declaration cases, plus 5 question-hook
+                                   the declaration cases, plus 16 question-hook
 plugins/practices/
   skills/                          the nine shared skills
 ```

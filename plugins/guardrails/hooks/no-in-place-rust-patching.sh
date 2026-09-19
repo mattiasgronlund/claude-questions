@@ -17,7 +17,9 @@
 # different things. A `git commit -F - <<'MSG'` whose message *describes* this
 # rule is not patching anything, and the first version of this hook refused
 # exactly that. So: the shell code is what gets searched for an in-place edit,
-# and a body only matters when an interpreter is being fed one.
+# and a body only matters when an interpreter is being fed one. The split
+# itself is in `lib/shell-code.sh`, because the hook that refuses a redundant
+# `just question-check` needs the same answer to the same question.
 #
 # Scratch paths are exempt. CLAUDE.md keeps Bash for "one-off measurement
 # scripts that write to the scratchpad", and a probe crate's `main.rs` under
@@ -27,18 +29,12 @@
 # Reading is untouched: `sed -n '10,20p'`, grep, git diff all pass.
 set -uo pipefail
 
+. "$(dirname "$(readlink -f "$0")")/lib/shell-code.sh"
+
 command=$(jq -r '.tool_input.command // ""')
 
 # Split the shell code from any heredoc bodies it carries.
-code=$(awk '
-	skip { if ($0 ~ "^[ \t]*" delim "[ \t]*$") skip = 0; next }
-	{ print }
-	match($0, /<<-?[ \t]*'\''?"?[A-Za-z_][A-Za-z0-9_]*/) {
-		delim = substr($0, RSTART, RLENGTH)
-		sub(/^<<-?[ \t]*'\''?"?/, "", delim)
-		skip = 1
-	}
-' <<<"$command")
+code=$(shell_code_of "$command")
 bodies=$(comm -13 <(sort -u <<<"$code") <(sort -u <<<"$command") 2>/dev/null || true)
 
 # A scratch path held in a variable is still a scratch path, and this hook reads

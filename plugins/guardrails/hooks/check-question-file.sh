@@ -3,11 +3,16 @@
 # so a violation is caught in the same turn that made it rather than on the next
 # `just question-check` call.
 #
-# Measured this week: 128 `question-check` calls costing $10.6, whose MEDIAN
-# result was 31 bytes — the checker prints nothing on a clean file, so almost
-# the entire cost was the round-trip of asking. Folding the check into the write
-# removes that round-trip on the common, clean-file case, where this hook prints
-# nothing either.
+# Measured when it was written: 128 `question-check` calls costing $10.6, whose
+# MEDIAN result was 31 bytes — the checker prints nothing on a clean file, so
+# almost the entire cost was the round-trip of asking. Folding the check into
+# the write removes that round-trip on the common, clean-file case.
+#
+# **It did not remove it, and the reason was the silence.** Through the week of
+# 2026-09-12 sessions went on making the call anyway — 148 of them after this
+# hook landed, three of which found something. A hook that says nothing on a
+# clean file looks exactly like a hook that is not installed, so a clean file
+# now says so; see the tail of this script.
 #
 # The checker lives in the `questions` plugin, not here, so it is resolved the
 # same way `statusline.sh` resolves it: `CLAUDE_QUESTIONS_PLUGIN`, then
@@ -44,8 +49,25 @@ fi
 [ -r "$file" ] || exit 0
 
 problems=$(python3 "$checker" check "$file" 2>&1)
-[ -z "$problems" ] && exit 0
 
-jq -n --arg reason "$(printf '`just question-check` found a grammar violation in %s:\n\n%s' "$file" "$problems")" \
-	'{decision: "block", reason: $reason}'
+if [ -n "$problems" ]; then
+	jq -n --arg reason "$(printf '`just question-check` found a grammar violation in %s:\n\n%s' "$file" "$problems")" \
+		'{decision: "block", reason: $reason}'
+	exit 0
+fi
+
+# A clean file says so, in one line, rather than saying nothing.
+#
+# `additionalContext` and not plain stdout: for a PostToolUse hook Claude Code
+# writes stdout to the debug log and the model never sees it, which would be the
+# same silence under a different name.
+#
+# The line names the open labels because it costs nothing to carry them — the
+# file has just been parsed — and because it is the one thing a session would
+# otherwise read the file back for. `docs/decisions.md` §151.
+open=$(python3 "$checker" compact "$file" 2>/dev/null)
+[ -n "$open" ] || open="nothing open"
+
+jq -n --arg context "$(printf 'The questions grammar checker ran on %s as part of this write: clean, %s. That is what `just question-check` does, so running it now re-asks a question already answered.' "${file##*/}" "$open")" \
+	'{hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext: $context}}'
 exit 0

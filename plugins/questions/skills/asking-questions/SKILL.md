@@ -1,6 +1,6 @@
 ---
 name: asking-questions
-description: Write a question for the user into open-questions.md so the reader, the status line and the checker all agree it exists. Use when asking the user a decision, when running a grilling round, when recording a lane's findings, when marking a question answered, or when `just question-check` reports a violation.
+description: Write a question for the user into open-questions.md so the reader, the status line and the checker all agree it exists. Use when asking the user a decision, when running a grilling round, when recording a lane's findings, when marking a question answered, or when the grammar checker blocks a write.
 ---
 
 # Asking the user a decision
@@ -56,7 +56,7 @@ file, so there is nothing to merge and no reason to go entry by entry. Over the
 week of 2026-09-07 it was written with 263 `Edit` calls against 57 `Write`s,
 median edit 374 bytes, at a median context of 150 000: $28 of editing to carry a
 few hundred bytes at a time. Hold the whole file, change what changed, write it
-once, and run the checker in the same call.
+once. The checker runs itself on that write — see below.
 
 ## Reading it back
 
@@ -93,11 +93,27 @@ this recipe exist to avoid.
 
 ## Checking it
 
-Run `just question-check <hash>` on **your own** file, in the turn you write a
-question. It names every violation with a line number.
+**Do not run `just question-check`. The write already ran it**, and the call is
+refused. Every `Write` and `Edit` to `open-questions.md` runs the checker
+through a `guardrails` hook: a violation comes back as a block, naming each one
+with its line number, and a clean file comes back as one line saying so and
+listing what is open.
 
-Nothing else is checked, and that is deliberate. There is no list of
-grandfathered sessions: `/tmp` is swept at 30 days so a list of session ids
+This section used to say the opposite — run the checker in the turn you write a
+question — and it was written before the hook existed. In the week of
+2026-09-12 sessions made that call 174 times, 148 of them after the hook landed,
+and **three** found anything: $17.58 spent re-asking a question the write had
+already answered, because a hook that says nothing on a clean file looks exactly
+like a hook that is not installed. It says something now. `docs/decisions.md`
+§151.
+
+If you have a real reason to check a file you did not just write, reach past the
+recipe to the checker: `python3 "$CLAUDE_PLUGINS_ROOT/questions/bin/questions.py"
+check <file>`. `just question-check` itself stays, because it is a person's
+command and because it is how a machine with no Claude Code in it checks a file.
+
+Nothing but your own file is checked, and that is deliberate. There is no list
+of grandfathered sessions: `/tmp` is swept at 30 days so a list of session ids
 dangles within a month, and it would be a second record beside the thing itself
 — the shape `docs/decisions.md` §60 rejected for the hub. A dead session's file
 cannot be fixed, so judging it is noise nobody can act on.
