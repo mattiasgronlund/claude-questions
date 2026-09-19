@@ -106,13 +106,36 @@ esac
 # already rung 2, and is then told again 3k later on reaching rung 3. Measured on
 # the session that wrote this: warned at 272,565 and again at 277,124, two turns
 # running. A ladder anchored to where you started climbing cannot do that.
+#
+# **Both fields or neither.** v0.3.2 wrote the rung alone, and reading that file
+# with this version's `read first last` takes the rung as the figure first warned
+# at — a baseline of 2 or 3 tokens, and a `last` of nothing, which says "never
+# warned". It said exactly that to the session that wrote v0.3.3, one version
+# later and at 299,056 tokens: a **first** warning, offering to raise a budget it
+# had already been told about twice. A live session's state file outlives the
+# version that wrote it, so a format that changes has to say what the old one
+# means. Here: the figure is unrecoverable, so the ladder restarts from now and
+# the next warning is a repeat, which is the one thing that is certainly true.
 state="${TMPDIR:-/tmp}/claude-context-budget-$session"
 read -r first last <<<"$(cat "$state" 2>/dev/null)"
-case "${first:-}" in '' | *[!0-9]*) first=$tokens ;; esac
-case "${last:-}" in '' | *[!0-9]*) last=-1 ;; esac
+case "${first:-}" in '' | *[!0-9]*) first= ;; esac
+case "${last:-}" in '' | *[!0-9]*) last= ;; esac
+if [ -z "$first" ] || [ -z "$last" ]; then
+	warned_before=$first
+	first=$tokens
+	last=-1
+	[ -n "$warned_before" ] && last=0
+fi
 rung=$(((tokens - first) / step))
+
+# Written before the quiet exit and not after it, because the quiet exit is the
+# one that has something to record: an upgraded state file decides its baseline
+# on a call that says nothing, and a write that happens only when the hook speaks
+# would throw that away and re-decide it, identically, for ever.
+keep=$last
+[ "$rung" -gt "$last" ] && keep=$rung
+printf '%s %s\n' "$first" "$keep" >"$state"
 [ "$rung" -le "$last" ] && exit 0
-printf '%s %s\n' "$first" "$rung" >"$state"
 
 pretty=$(printf "%'d" "$tokens")
 cap=$(printf "%'d" "$budget")

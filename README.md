@@ -57,7 +57,7 @@ plugins/guardrails/
                                    and is the registered ref the one asked for
   bin/check-declared-selftest.sh   10 cases: it skips where there is no Claude
                                    Code and only there, and it reads the pin
-  bin/selftest.sh                  those, plus 12 context budget cases, plus
+  bin/selftest.sh                  those, plus 13 context budget cases, plus
                                    the declaration cases, plus 16 question-hook
 plugins/practices/
   skills/                          the nine shared skills

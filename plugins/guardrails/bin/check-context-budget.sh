@@ -94,6 +94,27 @@ if [ -z "$crossed" ] || [ -n "$nagged" ]; then
 	failed=$((failed + 1))
 fi
 
+# A state file written by v0.3.2 holds the rung alone. Read as this version's two
+# fields it says "first warned at 2 tokens, never warned" — which is how a session
+# already warned twice got a *first* warning at 299,056. A live session outlives
+# the version that warned it, so the old shape has to mean something: quiet now,
+# and a repeat a full step later.
+total=$((total + 1))
+usage 260000 >"$work/upgrade.jsonl"
+usage 286000 >"$work/upgrade2.jsonl"
+printf '2\n' >"$work/claude-context-budget-upgraded"
+upgraded() {
+	jq -n --arg t "$work/$1" '{session_id:"upgraded", transcript_path:$t, hook_event_name:"Stop"}' |
+		TMPDIR="$work" CLAUDE_CONTEXT_BUDGET=250000 CLAUDE_CONTEXT_BUDGET_STEP=25000 "$hook"
+}
+quiet=$(upgraded upgrade.jsonl)
+later=$(upgraded upgrade2.jsonl | jq -r '.systemMessage')
+if [ -n "$quiet" ] || [ "${later#Context budget still growing}" = "$later" ]; then
+	echo "wanted an old-format state file to stay quiet and then repeat, got"
+	echo "  now='${quiet:0:40}' a step later='$later'"
+	failed=$((failed + 1))
+fi
+
 # Nine points of that week were billed inside the turn that crossed the budget,
 # where no Stop runs: the worst turn grew from 57k to 246k across 105 responses.
 # So the check runs after a tool call too, with advice that fits being mid-turn.
