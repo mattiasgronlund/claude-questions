@@ -47,7 +47,9 @@ plugins/guardrails/
                                    both PreToolUse hooks and so kept in one place
   hooks/check-question-file.sh     the grammar, checked right after a write, and
                                    a clean file says so rather than nothing
-  hooks/context-budget.sh
+  hooks/context-budget.sh          hand off past the budget, said again every
+                                   25k of further growth and from inside a long
+                                   turn as well as between them
   hooks/context-budget.default     the budget, in one place — the status line
                                    reads this same file rather than a copy
   hooks/patching-cases.json        24 core cases, repo-neutral paths
@@ -55,7 +57,7 @@ plugins/guardrails/
                                    and is the registered ref the one asked for
   bin/check-declared-selftest.sh   10 cases: it skips where there is no Claude
                                    Code and only there, and it reads the pin
-  bin/selftest.sh                  those, plus 8 context budget cases, plus
+  bin/selftest.sh                  those, plus 11 context budget cases, plus
                                    the declaration cases, plus 16 question-hook
 plugins/practices/
   skills/                          the nine shared skills

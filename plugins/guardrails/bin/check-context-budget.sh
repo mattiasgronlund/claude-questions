@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Runs the context budget hook against its cases and reports any that came out
-# wrong. The hook fires at most once per session, so every case uses a session
-# id of its own — a shared one would make the order of the cases matter.
+# wrong. The hook fires at most once per rung of a ladder, so every case that
+# does not mean to climb one uses a session id of its own — a shared one would
+# make the order of the cases matter.
 set -uo pipefail
 
 here=$(dirname "$(readlink -f "$0")")
@@ -41,15 +42,63 @@ check "a lane never hands off" big.jsonl '{"agent_id":"a123"}' 300000 quiet
 check "a raised budget is not passed" big.jsonl '{}' 500000 quiet
 check "a missing transcript is not an error" nowhere.jsonl '{}' 300000 quiet
 
-# Firing twice in one session would nag every turn from the threshold on.
+# Firing again at the same size would nag every turn from the threshold on.
 total=$((total + 1))
 payload=$(jq -n --arg t "$work/big.jsonl" '{session_id:"repeat", transcript_path:$t, hook_event_name:"Stop"}')
 first=$(TMPDIR="$work" CLAUDE_CONTEXT_BUDGET=300000 "$hook" <<<"$payload")
 second=$(TMPDIR="$work" CLAUDE_CONTEXT_BUDGET=300000 "$hook" <<<"$payload")
 if [ -z "$first" ] || [ -n "$second" ]; then
-	echo "wanted the warning once per session, got first='${first:0:20}' second='${second:0:20}'"
+	echo "wanted the warning once per rung, got first='${first:0:20}' second='${second:0:20}'"
 	failed=$((failed + 1))
 fi
+
+# A session that ignores the warning is the expensive one, and it used to be the
+# one guaranteed never to hear again: 13% of a week's dispatcher spend was billed
+# after a warning that was never repeated. A further step of growth says so again,
+# and says it differently, so the two are countable apart in a transcript.
+total=$((total + 1))
+usage 260000 >"$work/rung1.jsonl"
+usage 285000 >"$work/rung2.jsonl"
+climb() {
+	jq -n --arg t "$work/$1" '{session_id:"ladder", transcript_path:$t, hook_event_name:"Stop"}' |
+		TMPDIR="$work" CLAUDE_CONTEXT_BUDGET=250000 CLAUDE_CONTEXT_BUDGET_STEP=25000 "$hook"
+}
+one=$(climb rung1.jsonl | jq -r '.systemMessage')
+again=$(climb rung1.jsonl)
+two=$(climb rung2.jsonl | jq -r '.systemMessage')
+if [ -z "$one" ] || [ -n "$again" ] || [ -z "$two" ] || [ "$one" = "$two" ]; then
+	echo "wanted a first warning, silence inside the same step, then a different one a step up"
+	echo "  got first='$one' repeat='${again:0:20}' stepped='$two'"
+	failed=$((failed + 1))
+fi
+
+# Nine points of that week were billed inside the turn that crossed the budget,
+# where no Stop runs: the worst turn grew from 57k to 246k across 105 responses.
+# So the check runs after a tool call too, with advice that fits being mid-turn.
+total=$((total + 1))
+midturn=$(jq -n --arg t "$work/big.jsonl" \
+	'{session_id:"midturn", transcript_path:$t, hook_event_name:"PostToolUse"}' |
+	TMPDIR="$work" CLAUDE_CONTEXT_BUDGET=300000 "$hook")
+if [ "$(jq -r '.hookSpecificOutput.hookEventName' <<<"$midturn")" != "PostToolUse" ] ||
+	! grep -q 'do not abandon a merge' <<<"$(jq -r '.additionalContext' <<<"$midturn")"; then
+	echo "wanted a mid-turn warning addressed to PostToolUse, got: ${midturn:0:120}"
+	failed=$((failed + 1))
+fi
+
+# The plugin declares the events it fires on, and a hook that answers correctly
+# on an event nothing routes to it is a hook that never runs.
+total=$((total + 1))
+declared=$(jq -r '.hooks | to_entries[] | select(.value[].hooks[].command | contains("context-budget.sh")) | .key' \
+	"$(dirname "$here")/hooks/hooks.json" | sort -u | tr '\n' ' ')
+for event in PostToolUse Stop UserPromptSubmit; do
+	case " $declared " in *" $event "*) ;;
+	*)
+		echo "hooks.json does not route $event to context-budget.sh (routes: $declared)"
+		failed=$((failed + 1))
+		break
+		;;
+	esac
+done
 
 # The shipped default, with nothing in the environment. 210k is over the 200k
 # this ships with and under the 250k it shipped with before, so this case is the

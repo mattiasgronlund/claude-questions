@@ -201,9 +201,15 @@ the report said which of the three it was.
 **The dispatcher has a budget too, and the `guardrails` plugin's context budget hook
 is what says so.** The lane cap works — 51 lanes on 2026-09-05, median 17 minutes,
 none over 45. The dispatchers had no cap and spent 485M input tokens over 1994 turns,
-97% of it re-reading context, while writing almost no code. The hook fires once when
-the line is crossed; call the `handoff` skill then, rather than at the end of the next
-unit. Raise it for a session with `CLAUDE_CONTEXT_BUDGET`.
+97% of it re-reading context, while writing almost no code. The hook speaks when the
+line is crossed, again each further step past it, and after a tool call as well as
+between turns; call the `handoff` skill on the first of those, rather than at the end
+of the next unit. Raise it for a session with `CLAUDE_CONTEXT_BUDGET`.
+
+**Hearing it a second time is not new information, it is the bill.** Over 2026-09-12
+to 2026-09-20, 13% of all dispatcher spend was billed after a warning had already
+been delivered — a median of 13 more responses, and 68 in the worst session — and
+only a seventh of that tail was the handoff itself.
 
 **The number itself lives in `guardrails/hooks/context-budget.default` and nowhere
 else, this sentence included.** It used to be repeated here, and the repetition went
