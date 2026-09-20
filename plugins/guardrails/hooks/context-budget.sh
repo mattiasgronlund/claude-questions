@@ -54,16 +54,64 @@
 # finish the call and not start the next thing, because a hook cannot see whether
 # a merge is half done.
 #
-# Never in a subagent — a lane is short by construction and has nowhere to hand
-# off to.
+# ## A lane hears a different number, and is told to do a different thing
+#
+# This exited early on any `agent_id` until 2026-09-20, saying a lane "is short
+# by construction and has nowhere to hand off to". The second half was wrong: a
+# lane's handoff is its report — commit, say what is left, stop — which every
+# brief already asks for and nothing enforced. The first half was never
+# measured, and is false. Over 2026-09-12 to 2026-09-21, 134 rcad lanes spent
+# $433.55 between them, and their context reached a median peak of 134k, a p90
+# of 221k and a worst of 335k. A lane is short in *minutes*, which is what the
+# 45-minute rule caps; minutes are not tokens.
+#
+# The dial is picked the way the session dial was picked — the line where about
+# a third of the spend is billed above it. For lanes that is **150k**: $163 of
+# the $433, 37.7%, against 31.0% at 160k and 43.7% at 140k. It warns 40% of
+# lanes, a median of two rungs each and eight in the worst, and the 25k step is
+# the session's, for the session's reason.
+#
+# It is deliberately *not* the session's 200k, which would reach 12.9% — near
+# enough to nothing to not be worth a separate dial. It lives in
+# `lane-budget.default`, beside this script and nowhere else, for the same
+# reason the session figure does.
+#
+# **Re-measure it rather than believing this paragraph**, which is dated the day
+# it was written and goes stale on the next dispatch. In rcad,
+# `just spend <since> <until> ceiling subagents` prices a cap over lanes alone —
+# the `subagents` argument is a path filter, and a lane transcript is the only
+# kind with that in its path. It reported $25.77, 5.9% of lane spend, saved at a
+# 150k cap against $5.74 and 1.3% at 200k, which is the same conclusion in the
+# other currency: 200k is not worth a dial of its own. rcad's `docs/decisions.md`
+# §170 carries the rest, including the per-lane distribution this was chosen on.
+#
+# What a lane must not be told is to hand off: there is no next session to pick
+# it up, and it cannot raise its own budget. It is told to commit, report the
+# remainder and stop, which is the thing it can actually do. The headline says
+# "Lane budget" rather than "Context budget" so the two stay countable apart in
+# a transcript.
 set -uo pipefail
 
 here=$(dirname "$(readlink -f "$0")")
-budget=${CLAUDE_CONTEXT_BUDGET:-}
+payload=$(cat)
+
+# A lane has an agent_id. It is a different subject: a different budget, a
+# different instruction, and a ladder of its own — several lanes share one
+# session_id, so a state file keyed on that alone would have the first lane's
+# rungs silence the rest.
+agent=$(jq -r '.agent_id // empty' <<<"$payload")
+
+if [ -n "$agent" ]; then
+	budget=${CLAUDE_LANE_BUDGET:-}
+	default_file="$here/lane-budget.default"
+else
+	budget=${CLAUDE_CONTEXT_BUDGET:-}
+	default_file="$here/context-budget.default"
+fi
 if [ -z "$budget" ]; then
-	budget=$(cat "$here/context-budget.default" 2>/dev/null)
+	budget=$(cat "$default_file" 2>/dev/null)
 	case "$budget" in '' | *[!0-9]*)
-		echo "context-budget.sh: can't read a default from $here/context-budget.default" >&2
+		echo "context-budget.sh: can't read a default from $default_file" >&2
 		exit 1
 		;;
 	esac
@@ -71,11 +119,6 @@ fi
 
 step=${CLAUDE_CONTEXT_BUDGET_STEP:-25000}
 case "$step" in '' | *[!0-9]* | 0) step=25000 ;; esac
-
-payload=$(cat)
-
-# A lane has an agent_id; it is not the session this is about.
-[ -n "$(jq -r '.agent_id // empty' <<<"$payload")" ] && exit 0
 
 session=$(jq -r '.session_id // "unknown"' <<<"$payload")
 transcript=$(jq -r '.transcript_path // empty' <<<"$payload")
@@ -124,7 +167,7 @@ esac
 # reached `319,479 more than when you were first told`. Fixing the reader was not
 # enough because the bad figure was already on disk, wearing the new format. The
 # invariant is cheap to state and the check is the same branch as the upgrade.
-state="${TMPDIR:-/tmp}/claude-context-budget-$session"
+state="${TMPDIR:-/tmp}/claude-context-budget-$session${agent:+-$agent}"
 read -r first last <<<"$(cat "$state" 2>/dev/null)"
 case "${first:-}" in '' | *[!0-9]*) first= ;; esac
 case "${last:-}" in '' | *[!0-9]*) last= ;; esac
@@ -151,7 +194,16 @@ cap=$(printf "%'d" "$budget")
 # The first warning's line is word for word what it has always been, so a
 # measurement over a window that spans this change can still count crossings; a
 # repeat says so, and is countable on its own.
-if [ "$last" -lt 0 ]; then
+if [ -n "$agent" ]; then
+	if [ "$last" -lt 0 ]; then
+		headline="Lane budget passed at $tokens tokens — commit and report."
+		opening="This lane's context is at $pretty input tokens, past the $cap a lane is budgeted."
+	else
+		grown=$(printf "%'d" $((tokens - first)))
+		headline="Lane budget still growing: $tokens tokens, $grown more since the first warning — report and stop."
+		opening="This lane's context is at $pretty input tokens, past the $cap a lane is budgeted — $grown more than when you were first told, and that first time was not heeded."
+	fi
+elif [ "$last" -lt 0 ]; then
 	headline="Context budget passed at $tokens tokens — handoff suggested."
 	opening="Context is at $pretty input tokens, past the $cap budget. Raise it for a session with CLAUDE_CONTEXT_BUDGET."
 else
@@ -160,7 +212,31 @@ else
 	opening="Context is at $pretty input tokens, past the $cap budget — $grown more than when you were first told, and that first time was not heeded. Every response since has been billed at more than a fresh session would pay for the same call."
 fi
 
-if [ "$event" = "PostToolUse" ]; then
+if [ -n "$agent" ] && [ "$event" = "PostToolUse" ]; then
+	read -r -d '' reason <<EOF || true
+$opening
+
+Finish the call you are on — do not abandon a commit, a test run or a
+half-written file — and then stop rather than starting the next thing. Commit
+what is done and put the rest in your report.
+EOF
+elif [ -n "$agent" ]; then
+	read -r -d '' reason <<EOF || true
+$opening
+
+Your brief already asks for this; nothing but you enforces it. A lane's handoff
+is its report, so end the way the brief says to end:
+
+1. Commit what is done, with an explicit \`git add <path>\` per file.
+2. Report what is left — what you finished, what remains, and what you learned
+   that the next lane would otherwise rediscover.
+3. Stop. Do not start the next piece of the deliverable.
+
+You cannot hand off to another session and you cannot raise this budget; the
+dispatcher sets it. If your brief explicitly told you to run past this point,
+say so in the report and carry on.
+EOF
+elif [ "$event" = "PostToolUse" ]; then
 	read -r -d '' reason <<EOF || true
 $opening
 
