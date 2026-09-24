@@ -22,6 +22,31 @@ trap 'rm -rf "$work"' EXIT
 
 mkdir -p "$work/home"
 
+# The cases below hand the hook a fresh empty `HOME`, on purpose, so that the
+# `$HOME/git/mattiasgronlund/claude-questions` fallback resolves to nothing. On
+# a machine where `jq` and `python3` are mise shims that combination is fatal to
+# the hook: mise walks the CWD's ancestors for config files, so a selftest run
+# from anywhere under `/home/<user>` picks up `/home/<user>/.config/mise/
+# config.toml`, and mise keeps its *trust* state under `$HOME` — which the
+# empty one does not have. Every shim then exits 1 printing nothing on stdout,
+# and four cases come out silent for a reason that has nothing to do with the
+# hook. Run from a directory with no ancestor config instead; the hook does not
+# read the CWD, so this takes nothing away from what the cases test.
+cd "$work" || exit 1
+
+if ! env -u CLAUDE_PLUGINS_ROOT -u CLAUDE_CONFIG_DIR HOME="$work/home" \
+	jq -n '{}' >/dev/null 2>"$work/preflight"; then
+	printf 'the fake HOME cannot run jq, so no case below would mean anything:\n%s\n' \
+		"$(cat "$work/preflight")"
+	exit 1
+fi
+if ! env -u CLAUDE_PLUGINS_ROOT -u CLAUDE_CONFIG_DIR HOME="$work/home" \
+	python3 -c pass >/dev/null 2>"$work/preflight"; then
+	printf 'the fake HOME cannot run python3, so no case below would mean anything:\n%s\n' \
+		"$(cat "$work/preflight")"
+	exit 1
+fi
+
 cat >"$work/clean-open-questions.md" <<'MD'
 # Open questions
 
