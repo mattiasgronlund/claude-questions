@@ -23,3 +23,7 @@ jobs:
       # `check-declared-selftest.sh` builds every home and config directory it
       # reads, so it is indifferent to the runner's own `HOME`.
       - run: plugins/guardrails/bin/selftest.sh
+      # README.md's release steps, which eight tags in a row skipped with
+      # nothing here able to see it. On a tag push the tag's own name is
+      # checked too: too late to move the tag, not too late to cut the next.
+      - run: bin/check-release.sh ${{ github.ref_type == 'tag' && github.ref_name || '' }}

@@ -72,10 +72,10 @@ than three manifests do.
 
 ## Installing
 
-Once per machine, and the `@v0.2.3` is the point:
+Once per machine, and the `@v0.3.9` is the point:
 
 ```
-claude plugin marketplace add mattiasgronlund/claude-questions@v0.2.3
+claude plugin marketplace add mattiasgronlund/claude-questions@v0.3.9
 claude plugin install -y questions@mattiasgronlund-local
 claude plugin install -y guardrails@mattiasgronlund-local
 claude plugin install -y practices@mattiasgronlund-local
@@ -160,6 +160,17 @@ than decorative:
 `v0.1.0` and `v0.1.1` are one commit apart for exactly this reason: `v0.1.0`
 was cut before the README was rewritten, so anyone pinning it and reading the
 tree got install instructions for the directory source it had replaced.
+
+The eight tags from `v0.2.4` to `v0.3.8` skipped the first two steps, and
+nothing that ran could see it. `v0.2.4` and `v0.3.1` bumped no version at all;
+the other six moved `guardrails` alone, leaving `questions` and `practices` at
+0.2.3. All eight shipped an install line naming v0.2.3, which predates the
+context budget entirely. `v0.3.9` puts all three back in step, and
+`bin/check-release.sh` now runs in CI: it fails a tree whose three versions
+disagree with each other or with a `@v` in this file, and on a tag push it fails
+a tag that names a different version. Run it with the tag before cutting one —
+`bin/check-release.sh vX.Y.Z` — because once a tag is pushed, a red run can
+only tell you to cut the next one.
 
 ## Consuming it from a repo
 
@@ -300,6 +311,7 @@ differed — how the compile cache is wired, mise `[env]` in `rcad` and a justfi
 ```
 plugins/questions/bin/selftest.sh
 plugins/guardrails/bin/selftest.sh [overlay.json]
+bin/check-release.sh [vX.Y.Z]
 ```
 
 No toolchain, no package manager, no network — `python3`, `bash` and `jq`. That

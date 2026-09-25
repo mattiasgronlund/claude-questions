@@ -1,7 +1,7 @@
 {
   "name": "practices",
   "description": "The shared working skills: how to delegate, grill, hand off, test, audit a claim, and read a numerical refusal.",
-  "version": "0.2.3",
+  "version": "0.3.9",
   "author": {
     "name": "mattiasgronlund"
   }
