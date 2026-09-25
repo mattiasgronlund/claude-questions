@@ -78,11 +78,25 @@ somebody's work in flight as often as not.
 
 ```
 git log --oneline -1
-git checkout -B <lane-branch> <base sha>
+git switch -c <lane-branch> <base sha>
 ```
 
 **and require the lane to report both shas back.** Not one — both. The sha it landed
-on is the diagnosis; the sha it checked out is the fix.
+on is the diagnosis; the sha it switched to is the fix.
+
+**`switch -c`, never `checkout -B`.** `-B` resets a branch that already exists, and
+git 2.43 does so without a word while another worktree has that branch checked out.
+Nothing tells the other tree. It keeps its files and its index, so `git status`
+there shows a staged revert of everything newer, the old lane's commits drop off the
+branch, and a commit made there undoes the newer work. That is what happened in
+`rscene` on 2026-09-22 (`235ccaf`): the next round reused the letters, and round 21's
+`lane-B` and `lane-C` were reset under their own worktrees. `switch -c` refuses a
+name already taken.
+
+So the brief says two more things. What to do when the switch refuses — stop and
+report blocked, never reach for `checkout -B` or `switch -C` — because without it the
+nearest fix a lane knows is the reset. And the label has to be free before the lane
+goes out: `git branch --list '<lane-branch>'` prints nothing.
 
 On 2026-09-06 three lanes went out without this. All three branched from a docs
 branch that was two units behind `main`. One lane's every measurement was void. The
