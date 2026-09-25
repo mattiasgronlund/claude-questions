@@ -41,24 +41,89 @@ check "under budget stays quiet" small.jsonl '{}' 300000 quiet
 check "a raised budget is not passed" big.jsonl '{}' 500000 quiet
 check "a missing transcript is not an error" nowhere.jsonl '{}' 300000 quiet
 
+# A lane is handed its dispatcher's transcript, not its own. Every hook that
+# fires inside a subagent gets the *session's* `transcript_path`; the lane's
+# file is `<session>/subagents/agent-<id>.jsonl` beside it, one level deeper for
+# a workflow's agents, and under another project directory altogether when the
+# session entered a worktree after it started. These cases used to put the
+# lane's own figure in `transcript_path` — a payload Claude Code never sends —
+# and passed for five days while every lane was measured on its dispatcher.
+# `lane` lays out both files and prints the payload a lane really receives.
+#
+#     lane <session> <agent> <lane tokens> <dispatcher tokens> [<subdir>] [<project>]
+lane() {
+	local session=$1 agent=$2 sub=${5:+$5/} project=${6:-repo}
+	mkdir -p "$work/projects/repo" "$work/projects/$project/$session/subagents/$sub"
+	usage "$4" >"$work/projects/repo/$session.jsonl"
+	usage "$3" >"$work/projects/$project/$session/subagents/${sub}agent-$agent.jsonl"
+	jq -n --arg s "$session" --arg a "$agent" --arg t "$work/projects/repo/$session.jsonl" \
+		'{session_id:$s, agent_id:$a, transcript_path:$t, hook_event_name:"PostToolUse"}'
+}
+lane_hook() { env -u CLAUDE_CONTEXT_BUDGET -u CLAUDE_LANE_BUDGET TMPDIR="$work" "$hook"; }
+
 # A lane used to be exempt outright. It is not short in tokens — 134 rcad lanes
 # over 2026-09-12..21 reached a median peak of 134k and a worst of 335k, and
 # 37.7% of their $433 was billed at or above the 150k this now ships. What a
-# lane cannot do is hand off, so it is told to commit and report instead; the
-# headline says so, and says "Lane budget" so the two kinds of warning stay
-# countable apart in a transcript.
+# lane cannot do is hand off, so it is told to finish the call, commit and
+# report — unless its brief told it to run on — and the headline says "Lane
+# budget" so the two kinds of warning stay countable apart in a transcript. The
+# figure is the lane's: 330k, under a dispatcher at 90k that is past nothing.
 total=$((total + 1))
-lane=$(jq -n --arg t "$work/big.jsonl" \
-	'{session_id:"lane-warns", agent_id:"a123", transcript_path:$t, hook_event_name:"Stop"}' |
-	env -u CLAUDE_CONTEXT_BUDGET -u CLAUDE_LANE_BUDGET TMPDIR="$work" "$hook")
-said=$(jq -r '.systemMessage' <<<"$lane")
-body=$(jq -r '.additionalContext' <<<"$lane")
-if [ "${said#Lane budget passed at}" = "$said" ] ||
+warned=$(lane lane-warns a123 330000 90000 | lane_hook)
+said=$(jq -r '.systemMessage' <<<"$warned")
+body=$(jq -r '.additionalContext' <<<"$warned")
+if [ "${said#Lane budget passed at 330000 tokens}" = "$said" ] ||
+	[ "$(jq -r '.hookSpecificOutput.hookEventName' <<<"$warned")" != "PostToolUse" ] ||
+	! grep -q 'Finish the call you are on' <<<"$body" ||
 	! grep -q 'Commit what is done' <<<"$body" ||
+	! grep -q 'If your brief explicitly told you to run past this point' <<<"$body" ||
 	grep -q 'Call the handoff skill' <<<"$body"; then
-	echo "wanted a lane told to commit and report, never sent to the handoff skill, got"
+	echo "wanted a lane told its own 330k, to finish the call, commit and report unless"
+	echo "its brief says to run on, and never sent to the handoff skill, got"
 	echo "  headline='$said'"
 	echo "  body='${body:0:200}'"
+	failed=$((failed + 1))
+fi
+
+# The other half of the same fault: a dispatcher past the lane dial is not a lane
+# past it. Of the 76 lanes warned from 2026-09-20 to 25, 51 never reached 150k
+# themselves, and two stopped with nothing done on the strength of it.
+total=$((total + 1))
+dispatcher_only=$(lane lane-small a124 50000 330000 | lane_hook)
+if [ -n "$dispatcher_only" ]; then
+	echo "wanted a lane at 50k under a dispatcher at 330k to stay quiet, got: ${dispatcher_only:0:80}"
+	failed=$((failed + 1))
+fi
+
+total=$((total + 1))
+in_workflow=$(lane lane-workflow a125 160000 90000 workflows/wf_0123abcd-ef0 | lane_hook)
+if [ -z "$in_workflow" ]; then
+	echo "wanted a workflow's lane at 160k, under subagents/workflows/<run>/, to warn, got silence"
+	failed=$((failed + 1))
+fi
+
+# rcad session 0e21fcb4 on 2026-09-25: its own transcript stayed under the hub's
+# project directory, and its lanes were written under the worktree's.
+total=$((total + 1))
+moved=$(lane lane-moved a126 160000 90000 "" worktree | lane_hook)
+if [ -z "$moved" ]; then
+	echo "wanted a lane at 160k found under another project directory than its session, got silence"
+	failed=$((failed + 1))
+fi
+
+# A lane whose transcript cannot be found must not be measured on the
+# dispatcher's instead — that fallback is the fault, and it looked like a
+# working hook for five days. It fails out loud, so a change in where Claude
+# Code keeps a subagent's transcript is an error rather than a silence.
+total=$((total + 1))
+usage 330000 >"$work/projects/repo/lane-lost.jsonl"
+lost=$(jq -n --arg t "$work/projects/repo/lane-lost.jsonl" \
+	'{session_id:"lane-lost", agent_id:"a127", transcript_path:$t, hook_event_name:"PostToolUse"}' |
+	lane_hook 2>"$work/lost.err")
+lost_status=$?
+if [ "$lost_status" -eq 0 ] || [ -n "$lost" ] || ! grep -q 'a127' "$work/lost.err"; then
+	echo "wanted a lane with no transcript to fail naming it, not to read the dispatcher's, got"
+	echo "  status=$lost_status stdout='${lost:0:40}' stderr='$(head -c 120 "$work/lost.err")'"
 	failed=$((failed + 1))
 fi
 
@@ -66,13 +131,10 @@ fi
 # below 200k — which is 87% of them, and the reason this is a separate figure.
 # 160k is over the 150k shipped and under the session's 200k.
 total=$((total + 1))
+between=$(lane lane-dial b456 160000 90000 | lane_hook)
 usage 160000 >"$work/lane-mid.jsonl"
-between=$(jq -n --arg t "$work/lane-mid.jsonl" \
-	'{session_id:"lane-dial", agent_id:"b456", transcript_path:$t, hook_event_name:"Stop"}' |
-	env -u CLAUDE_CONTEXT_BUDGET -u CLAUDE_LANE_BUDGET TMPDIR="$work" "$hook")
 session_quiet=$(jq -n --arg t "$work/lane-mid.jsonl" \
-	'{session_id:"lane-dial-session", transcript_path:$t, hook_event_name:"Stop"}' |
-	env -u CLAUDE_CONTEXT_BUDGET -u CLAUDE_LANE_BUDGET TMPDIR="$work" "$hook")
+	'{session_id:"lane-dial-session", transcript_path:$t, hook_event_name:"Stop"}' | lane_hook)
 if [ -z "$between" ] || [ -n "$session_quiet" ]; then
 	echo "wanted 160k to warn a lane and not a session, got"
 	echo "  lane='${between:0:40}' session='${session_quiet:0:40}'"
@@ -82,11 +144,9 @@ fi
 # CLAUDE_LANE_BUDGET raises it; CLAUDE_CONTEXT_BUDGET is not the lane's dial and
 # must not silence one.
 total=$((total + 1))
-raised=$(jq -n --arg t "$work/big.jsonl" \
-	'{session_id:"lane-raised", agent_id:"c789", transcript_path:$t, hook_event_name:"Stop"}' |
+raised=$(lane lane-raised c789 330000 90000 |
 	env -u CLAUDE_CONTEXT_BUDGET TMPDIR="$work" CLAUDE_LANE_BUDGET=500000 "$hook")
-wrong_dial=$(jq -n --arg t "$work/big.jsonl" \
-	'{session_id:"lane-wrong-dial", agent_id:"d012", transcript_path:$t, hook_event_name:"Stop"}' |
+wrong_dial=$(lane lane-wrong-dial d012 330000 90000 |
 	env -u CLAUDE_LANE_BUDGET TMPDIR="$work" CLAUDE_CONTEXT_BUDGET=500000 "$hook")
 if [ -n "$raised" ] || [ -z "$wrong_dial" ]; then
 	echo "wanted CLAUDE_LANE_BUDGET to raise the lane dial and CLAUDE_CONTEXT_BUDGET not to, got"
@@ -98,27 +158,11 @@ fi
 # silences every other lane of the same dispatch — the failure this file's
 # opening comment warns about for cases, happening in production.
 total=$((total + 1))
-one_lane=$(jq -n --arg t "$work/big.jsonl" \
-	'{session_id:"shared", agent_id:"first", transcript_path:$t, hook_event_name:"Stop"}' |
-	env -u CLAUDE_CONTEXT_BUDGET -u CLAUDE_LANE_BUDGET TMPDIR="$work" "$hook")
-other_lane=$(jq -n --arg t "$work/big.jsonl" \
-	'{session_id:"shared", agent_id:"second", transcript_path:$t, hook_event_name:"Stop"}' |
-	env -u CLAUDE_CONTEXT_BUDGET -u CLAUDE_LANE_BUDGET TMPDIR="$work" "$hook")
+one_lane=$(lane shared first 330000 90000 | lane_hook)
+other_lane=$(lane shared second 330000 90000 | lane_hook)
 if [ -z "$one_lane" ] || [ -z "$other_lane" ]; then
 	echo "wanted each lane of a session to climb its own ladder, got"
 	echo "  first='${one_lane:0:40}' second='${other_lane:0:40}'"
-	failed=$((failed + 1))
-fi
-
-# Mid-turn, a lane is told to finish the call and not to start the next thing —
-# the same narrowing the session gets, with the lane's ending.
-total=$((total + 1))
-lane_midturn=$(jq -n --arg t "$work/big.jsonl" \
-	'{session_id:"lane-midturn", agent_id:"e345", transcript_path:$t, hook_event_name:"PostToolUse"}' |
-	env -u CLAUDE_CONTEXT_BUDGET -u CLAUDE_LANE_BUDGET TMPDIR="$work" "$hook")
-if [ "$(jq -r '.hookSpecificOutput.hookEventName' <<<"$lane_midturn")" != "PostToolUse" ] ||
-	! grep -q 'Finish the call you are on' <<<"$(jq -r '.additionalContext' <<<"$lane_midturn")"; then
-	echo "wanted a mid-turn lane warning addressed to PostToolUse, got: ${lane_midturn:0:120}"
 	failed=$((failed + 1))
 fi
 
@@ -126,10 +170,7 @@ fi
 # 150k this ships with and under every figure considered above it, so this is
 # the case that notices the default drifting.
 total=$((total + 1))
-usage 155000 >"$work/lane-default.jsonl"
-lane_shipped=$(jq -n --arg t "$work/lane-default.jsonl" \
-	'{session_id:"lane-default", agent_id:"f678", transcript_path:$t, hook_event_name:"Stop"}' |
-	env -u CLAUDE_CONTEXT_BUDGET -u CLAUDE_LANE_BUDGET TMPDIR="$work" "$hook")
+lane_shipped=$(lane lane-default f678 155000 90000 | lane_hook)
 if [ -z "$lane_shipped" ]; then
 	echo "wanted the shipped lane default to warn at 155k tokens, got silence"
 	failed=$((failed + 1))

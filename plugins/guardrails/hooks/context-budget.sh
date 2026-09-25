@@ -90,6 +90,35 @@
 # remainder and stop, which is the thing it can actually do. The headline says
 # "Lane budget" rather than "Context budget" so the two stay countable apart in
 # a transcript.
+#
+# ## Where a lane's own figure lives, which is not where it is pointed
+#
+# Every hook that fires inside a subagent is given the **session's**
+# `transcript_path`. The lane's file is `<session>/subagents/agent-<id>.jsonl`
+# beside it — under `subagents/workflows/<run>/` for a workflow's agents — and no
+# field of a PostToolUse payload names it: `agent_transcript_path` exists only on
+# SubagentStop, in claude 2.1.281. v0.3.6 read the path it was handed, so from
+# 2026-09-20 every lane was told its dispatcher's size as its own. In 58 of 58
+# lanes warned over 2026-09-22..25 the figure matched a row of the dispatcher's
+# transcript and no row of the lane's; of 459 lanes in that window, 51 were warned
+# without reaching 150k and 168 passed it unwarned. Two lanes stopped with their
+# work undone, and the explanation that went round — a lane "starts at 173k before
+# doing anything" — was the dispatcher's growth, read off lanes that start at
+# 45–60k.
+#
+# The file is looked for under every project directory, not only the session's: a
+# session that enters a worktree after it starts keeps its own transcript where it
+# began and writes its lanes under the worktree's (rcad session 0e21fcb4,
+# 2026-09-25). A lane whose file cannot be found fails the hook out loud. Falling
+# back to the session's transcript is the fault itself, and staying quiet would
+# turn the lane arm off without anyone noticing. It cannot misfire on a lane's
+# first call: a probe lane found its own file on disk *during* that call, already
+# ending in the assistant turn that made it.
+#
+# A lane never fires `Stop` either — it fires SubagentStop, which this plugin does
+# not route — so v0.3.6's lane Stop arm never ran: 0 of those 76 lanes saw its
+# text, and the one sentence in it that let a brief overrule the warning never
+# reached a lane. There is one lane message now, and it carries that sentence.
 set -uo pipefail
 
 here=$(dirname "$(readlink -f "$0")")
@@ -123,6 +152,22 @@ case "$step" in '' | *[!0-9]* | 0) step=25000 ;; esac
 session=$(jq -r '.session_id // "unknown"' <<<"$payload")
 transcript=$(jq -r '.transcript_path // empty' <<<"$payload")
 event=$(jq -r '.hook_event_name // "Stop"' <<<"$payload")
+
+# A lane is handed its session's transcript, not its own; the section above on
+# where a lane's own figure lives says why every project directory is searched.
+if [ -n "$agent" ]; then
+	projects=$(dirname "$(dirname "$transcript")")
+	lane_transcript=
+	for candidate in "$projects"/*/"$session"/subagents/agent-"$agent".jsonl \
+		"$projects"/*/"$session"/subagents/workflows/*/agent-"$agent".jsonl; do
+		[ -r "$candidate" ] && lane_transcript=$candidate && break
+	done
+	if [ -z "$lane_transcript" ]; then
+		echo "context-budget.sh: no transcript for lane $agent under $projects/*/$session/subagents" >&2
+		exit 1
+	fi
+	transcript=$lane_transcript
+fi
 [ -r "$transcript" ] || exit 0
 
 # The last assistant turn's total input: fresh tokens plus everything re-read
@@ -212,25 +257,17 @@ else
 	opening="Context is at $pretty input tokens, past the $cap budget — $grown more than when you were first told, and that first time was not heeded. Every response since has been billed at more than a fresh session would pay for the same call."
 fi
 
-if [ -n "$agent" ] && [ "$event" = "PostToolUse" ]; then
+if [ -n "$agent" ]; then
 	read -r -d '' reason <<EOF || true
 $opening
 
 Finish the call you are on — do not abandon a commit, a test run or a
-half-written file — and then stop rather than starting the next thing. Commit
-what is done and put the rest in your report.
-EOF
-elif [ -n "$agent" ]; then
-	read -r -d '' reason <<EOF || true
-$opening
-
-Your brief already asks for this; nothing but you enforces it. A lane's handoff
-is its report, so end the way the brief says to end:
+half-written file — and then stop rather than starting the next thing. A lane's
+handoff is its report:
 
 1. Commit what is done, with an explicit \`git add <path>\` per file.
 2. Report what is left — what you finished, what remains, and what you learned
    that the next lane would otherwise rediscover.
-3. Stop. Do not start the next piece of the deliverable.
 
 You cannot hand off to another session and you cannot raise this budget; the
 dispatcher sets it. If your brief explicitly told you to run past this point,

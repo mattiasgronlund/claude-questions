@@ -52,12 +52,14 @@ plugins/guardrails/
                                    from inside a long turn as well as between
   hooks/context-budget.default     the budget, in one place — the status line
                                    reads this same file rather than a copy
+  hooks/lane-budget.default        a lane's budget, measured on the lane's own
+                                   transcript, which is not the one it is handed
   hooks/patching-cases.json        24 core cases, repo-neutral paths
   bin/check-declared.sh            are the plugins declared, not just present,
                                    and is the registered ref the one asked for
   bin/check-declared-selftest.sh   10 cases: it skips where there is no Claude
                                    Code and only there, and it reads the pin
-  bin/selftest.sh                  those, plus 14 context budget cases, plus
+  bin/selftest.sh                  those, plus 22 context budget cases, plus
                                    the declaration cases, plus 16 question-hook
 plugins/practices/
   skills/                          the nine shared skills

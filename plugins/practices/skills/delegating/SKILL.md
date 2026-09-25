@@ -211,6 +211,13 @@ to 2026-09-20, 13% of all dispatcher spend was billed after a warning had alread
 been delivered — a median of 13 more responses, and 68 in the worst session — and
 only a seventh of that tail was the handoff itself.
 
+**A lane hears a budget of its own, `lane-budget.default`, counted on its own
+transcript**, and is told to finish the call, commit and report — unless its brief
+told it to run past that point. So a lane you expect to run long says so in its
+brief, in those words. Before guardrails v0.3.7 the figure a lane heard was its
+dispatcher's, and briefs learned to say "carry on past it"; that line now tells a
+lane to ignore a warning that is true.
+
 **The number itself lives in `guardrails/hooks/context-budget.default` and nowhere
 else, this sentence included.** It used to be repeated here, and the repetition went
 stale the way every copy does: `3a27299` lowered the default to 200k and did not move
