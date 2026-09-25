@@ -233,8 +233,18 @@ keep=$last
 printf '%s %s\n' "$first" "$keep" >"$state"
 [ "$rung" -le "$last" ] && exit 0
 
-pretty=$(printf "%'d" "$tokens")
-cap=$(printf "%'d" "$budget")
+# Grouped by hand: `printf "%'d"` groups thousands only under a locale that has a
+# separator, so the same warning read "26,000" here and "26000" on a runner in C.
+grouped() {
+	local n=$1 out=
+	while [ ${#n} -gt 3 ]; do
+		out=,${n: -3}$out
+		n=${n:0:${#n}-3}
+	done
+	printf '%s%s' "$n" "$out"
+}
+pretty=$(grouped "$tokens")
+cap=$(grouped "$budget")
 
 # The first warning's line is word for word what it has always been, so a
 # measurement over a window that spans this change can still count crossings; a
@@ -244,7 +254,7 @@ if [ -n "$agent" ]; then
 		headline="Lane budget passed at $tokens tokens — commit and report."
 		opening="This lane's context is at $pretty input tokens, past the $cap a lane is budgeted."
 	else
-		grown=$(printf "%'d" $((tokens - first)))
+		grown=$(grouped $((tokens - first)))
 		headline="Lane budget still growing: $tokens tokens, $grown more since the first warning — report and stop."
 		opening="This lane's context is at $pretty input tokens, past the $cap a lane is budgeted — $grown more than when you were first told, and that first time was not heeded."
 	fi
@@ -252,7 +262,7 @@ elif [ "$last" -lt 0 ]; then
 	headline="Context budget passed at $tokens tokens — handoff suggested."
 	opening="Context is at $pretty input tokens, past the $cap budget. Raise it for a session with CLAUDE_CONTEXT_BUDGET."
 else
-	grown=$(printf "%'d" $((tokens - first)))
+	grown=$(grouped $((tokens - first)))
 	headline="Context budget still growing: $tokens tokens, $grown more since the first warning — handoff overdue."
 	opening="Context is at $pretty input tokens, past the $cap budget — $grown more than when you were first told, and that first time was not heeded. Every response since has been billed at more than a fresh session would pay for the same call."
 fi

@@ -3,6 +3,13 @@
 # wrong. The hook fires at most once per rung of a ladder, so every case that
 # does not mean to climb one uses a session id of its own — a shared one would
 # make the order of the cases matter.
+#
+# The cases run in the C locale, which is what CI's runner has. Under this
+# machine's locale they passed for six days while the runner failed them:
+# `printf "%'d"` groups thousands only where the locale has a separator, and a
+# case wanting "26,000" read "26000" there. That is rcad §173's shape — a check
+# answering a property of its environment — so the environment is fixed here.
+export LC_ALL=C
 set -uo pipefail
 
 here=$(dirname "$(readlink -f "$0")")
